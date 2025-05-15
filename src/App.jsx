@@ -16,6 +16,8 @@ import DomainAndHosting from './pages/DomainAndHosting';
 import CompanyExpenses from './pages/CompanyExpenses';
 import Birthdays from './pages/Birthdays';
 import UserManagement from './pages/UserManagement';
+import HostingForm from './pages/HostingForm';
+
 import { NotificationProvider } from './components/layout/NotificationContext';
 
 // Simple auth check
@@ -242,6 +244,14 @@ const App = () => {
             element={
               <ProtectedRoute superAdminOnly={true} requiredPermission="expenseSync">
                 <CompanyExpenses />
+              </ProtectedRoute>
+            }
+          />
+           <Route
+            path="/hosting/add"
+            element={
+              <ProtectedRoute requiredPermission="hosting">
+                <HostingForm />
               </ProtectedRoute>
             }
           />
