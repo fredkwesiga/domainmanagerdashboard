@@ -1,0 +1,27 @@
+export const CURRENCIES = [
+    { code: "USD", name: "US Dollar", symbol: "$" },
+    { code: "EUR", name: "Euro", symbol: "€" },
+    { code: "GBP", name: "British Pound Sterling", symbol: "£" },
+    // { code: "JPY", name: "Japanese Yen", symbol: "¥" },
+    // { code: "CNY", name: "Chinese Yuan", symbol: "¥" },
+    // { code: "INR", name: "Indian Rupee", symbol: "₹" },
+    // { code: "AUD", name: "Australian Dollar", symbol: "A$" },
+    // { code: "CAD", name: "Canadian Dollar", symbol: "C$" },
+    // { code: "CHF", name: "Swiss Franc", symbol: "CHF" },
+    // { code: "ZAR", name: "South African Rand", symbol: "R" },
+    { code: "UGX", name: "Ugandan Shilling", symbol: "USh" },
+    // { code: "KES", name: "Kenyan Shilling", symbol: "KSh" },
+    // { code: "NGN", name: "Nigerian Naira", symbol: "₦" },
+    // { code: "BRL", name: "Brazilian Real", symbol: "R$" },
+    // { code: "MXN", name: "Mexican Peso", symbol: "$" },
+    // { code: "SAR", name: "Saudi Riyal", symbol: "﷼" },
+    // { code: "AED", name: "United Arab Emirates Dirham", symbol: "د.إ" },
+    // { code: "SEK", name: "Swedish Krona", symbol: "kr" },
+    // { code: "NOK", name: "Norwegian Krone", symbol: "kr" },
+    // { code: "SGD", name: "Singapore Dollar", symbol: "S$" },
+    // { code: "HKD", name: "Hong Kong Dollar", symbol: "HK$" },
+    // { code: "KRW", name: "South Korean Won", symbol: "₩" },
+    // { code: "TRY", name: "Turkish Lira", symbol: "₺" },
+    // { code: "PHP", name: "Philippine Peso", symbol: "₱" }
+  ];
+  
