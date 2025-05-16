@@ -12,6 +12,7 @@ import LoginPage from './pages/LoginPage';
 import NotFoundPage from './pages/NotFound';
 import Hosting from './pages/Hosting';
 import Subscription from './pages/Subscription';
+import SubscriptionForm from './pages/SubscriptionForm';
 import DomainAndHosting from './pages/DomainAndHosting';
 import CompanyExpenses from './pages/CompanyExpenses';
 import Birthdays from './pages/Birthdays';
@@ -193,6 +194,14 @@ const App = () => {
             }
           />
           <Route
+            path="subscriptions/add"
+            element={
+              <ProtectedRoute requiredPermission="subscriptions">
+                <SubscriptionForm/>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="domain-and-hosting"
             element={
               <ProtectedRoute requiredPermission="domains">
@@ -223,14 +232,6 @@ const App = () => {
             element={
               <ProtectedRoute requiredPermission="birthdays">
                 <BirthdayForm />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="expense-sync"
-            element={
-              <ProtectedRoute superAdminOnly={true} requiredPermission="expenseSync">
-                <CompanyExpenses />
               </ProtectedRoute>
             }
           />

@@ -28,12 +28,12 @@ const LoginForm = () => {
 
         // Set permissions
         const mockPermissions = {
-          'admin1@tekjuice.co.uk': { dashboard: true, domains: true, hosting: false, subscriptions: false, birthdays: false, expenseSync: false },
-          'admin2@tekjuice.co.uk': { dashboard: true, domains: false, hosting: true, subscriptions: false, birthdays: false, expenseSync: false },
-          'admin@tekjuice.co.uk': { dashboard: true, domains: true, hosting: true, subscriptions: true, birthdays: false, expenseSync: false },
-          'superadmin@tekjuice.co.uk': { dashboard: true, domains: true, hosting: true, subscriptions: true, settings: true, birthdays: true, expenseSync: true },
+          'admin1@tekjuice.co.uk': { dashboard: true, domains: true, hosting: false, subscriptions: false, birthdays: false},
+          'admin2@tekjuice.co.uk': { dashboard: true, domains: false, hosting: true, subscriptions: false, birthdays: false},
+          'admin@tekjuice.co.uk': { dashboard: true, domains: true, hosting: true, subscriptions: true, birthdays: false},
+          'superadmin@tekjuice.co.uk': { dashboard: true, domains: true, hosting: true, subscriptions: true, settings: true, birthdays: true},
         };
-        const permissions = mockPermissions[user.email] || { dashboard: true, domains: false, hosting: false, subscriptions: false, birthdays: false, expenseSync: false };
+        const permissions = mockPermissions[user.email] || { dashboard: true, domains: false, hosting: false, subscriptions: false, birthdays: false};
         console.log('LoginForm: Setting userPermissions=', permissions);
         localStorage.setItem('userPermissions', JSON.stringify(permissions));
         

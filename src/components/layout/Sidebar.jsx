@@ -46,7 +46,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
     { icon: FiServer, label: 'Hosting', to: '/hosting', permission: 'hosting' },
     // { icon: FiCreditCard, label: 'Subscription', to: '/subscriptions', permission: 'subscriptions' },
     { icon: FiPackage, label: 'Domain & Hosting', to: '/domain-and-hosting', permission: 'domains' },
-    { icon: FiCreditCard, label: 'Subscription', to: '/expense-sync', permission: 'expenseSync' },
+    { icon: FiCreditCard, label: 'Subscription', to: '/subscriptions', permission: 'subscriptions' },
     { icon: FiGift, label: 'Birthdays', to: '/birthdays', permission: 'birthdays' }
   ];
 
