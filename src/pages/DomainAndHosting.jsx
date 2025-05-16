@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Tab } from '@headlessui/react';
-import { FiSearch, FiMoreVertical } from 'react-icons/fi';
+import { FiSearch, FiX, FiEye, FiEdit, FiTrash, FiMoreVertical } from 'react-icons/fi';
+import { toast } from 'react-toastify';
+import { useNavigate } from 'react-router-dom';
 
 // Mock data for Domains and Hosting
 const mockData = [
@@ -37,6 +39,7 @@ const mockData = [
 ];
 
 const DomainAndHosting = () => {
+  const navigate = useNavigate();
   const [data, setData] = useState(mockData);
   const [filteredData, setFilteredData] = useState([]);
   const [stats, setStats] = useState({
@@ -50,6 +53,11 @@ const DomainAndHosting = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
+  const [dropdownOpen, setDropdownOpen] = useState(null);
 
   // Calculate statistics
   const calculateStats = (data) => {
@@ -165,22 +173,16 @@ const DomainAndHosting = () => {
 
     // Apply search query
     if (searchQuery) {
-      filtered = filtered.filter((item) =>
-        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.ownerEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.owner.toLowerCase().includes(searchQuery.toLowerCase())
+      filtered = filtered.filter(
+        (item) =>
+          item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.ownerEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.owner.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
 
     setFilteredData(filtered);
   };
-
-  useEffect(() => {
-    // Initialize data and stats
-    setFilteredData(data);
-    calculateStats(data);
-    filterData(0); // Default to "All" tab
-  }, [data]);
 
   // Handle search input
   const handleSearch = (e) => {
@@ -188,13 +190,129 @@ const DomainAndHosting = () => {
     filterData(0); // Reset to "All" tab when searching
   };
 
-  // Format expiry date to DD/MM/YYYY
+  // Format date to DD/MM/YYYY for display
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1)
       .toString()
       .padStart(2, '0')}/${date.getFullYear()}`;
   };
+
+  // Format date to YYYY-MM-DD for input fields
+  const formatDateForInput = (dateString) => {
+    const date = new Date(dateString);
+    return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date
+      .getDate()
+      .toString()
+      .padStart(2, '0')}`;
+  };
+
+  // Handle View action
+  const handleView = (item) => {
+    setSelectedItem(item);
+    setShowModal(true);
+    setDropdownOpen(null);
+  };
+
+  // Handle Edit action
+  const handleEdit = (item) => {
+    setEditingItem({
+      ...item,
+      ownerFirstName: item.owner.split(' ')[0],
+      ownerLastName: item.owner.split(' ')[1] || '',
+    });
+    setShowEditModal(true);
+    setDropdownOpen(null);
+  };
+
+  // Handle Edit form changes
+  const handleEditChange = (e) => {
+    const { name, value } = e.target;
+    setEditingItem((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  // Handle Edit form submission
+  const handleEditSubmit = async () => {
+    setLoading(true);
+    try {
+      const updatedItem = {
+        ...editingItem,
+        owner: `${editingItem.ownerFirstName} ${editingItem.ownerLastName}`.trim(),
+        dates: { expiryDate: editingItem.dates.expiryDate },
+      };
+      const updatedData = data.map((item) =>
+        item.id === updatedItem.id ? updatedItem : item
+      );
+      setData(updatedData);
+      calculateStats(updatedData);
+      filterData(0);
+      toast.success('Item updated successfully!', {
+        position: 'top-right',
+        autoClose: 2000,
+      });
+      setShowEditModal(false);
+      setEditingItem(null);
+    } catch (err) {
+      setError(err.message || 'Failed to edit item');
+      toast.error('Failed to edit item', {
+        position: 'top-right',
+        autoClose: 2000,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle Delete action
+  const handleDelete = async (id) => {
+    if (window.confirm('Are you sure you want to delete this item?')) {
+      setLoading(true);
+      try {
+        const updatedData = data.filter((item) => item.id !== id);
+        setData(updatedData);
+        calculateStats(updatedData);
+        filterData(0);
+        toast.success('Item deleted successfully!', {
+          position: 'top-right',
+          autoClose: 2000,
+        });
+        setDropdownOpen(null);
+      } catch (err) {
+        setError(err.message || 'Failed to delete item');
+        toast.error('Failed to delete item', {
+          position: 'top-right',
+          autoClose: 2000,
+        });
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  // Handle Add New buttons
+  const handleAddNewDomain = () => {
+    navigate('/domains/add');
+  };
+
+  const handleAddNewHosting = () => {
+    navigate('/hosting/add');
+  };
+
+  // Handle dropdown toggle
+  const handleDropdownToggle = (id, e) => {
+    e.stopPropagation();
+    console.log('Dropdown clicked for:', id); // Debug click
+    setDropdownOpen(dropdownOpen === id ? null : id);
+  };
+
+  useEffect(() => {
+    setFilteredData(data);
+    calculateStats(data);
+    filterData(0); // Default to "All" tab
+  }, [data]);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -221,10 +339,16 @@ const DomainAndHosting = () => {
               />
             </div>
             {/* <div className="flex gap-2">
-              <button className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-semibold rounded-md shadow-sm text-white bg-indigo-900 hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+              <button
+                onClick={handleAddNewDomain}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-semibold rounded-md shadow-sm text-white bg-indigo-900 hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
                 + Add New Domain
               </button>
-              <button className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-semibold rounded-md shadow-sm text-white bg-indigo-900 hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+              <button
+                onClick={handleAddNewHosting}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-semibold rounded-md shadow-sm text-white bg-indigo-900 hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
                 + Add New Hosting
               </button>
             </div> */}
@@ -318,22 +442,10 @@ const DomainAndHosting = () => {
                             Name
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            ID
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Type
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Hosting Type
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Status
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Owner
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Expiry Date
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
                         </tr>
@@ -365,13 +477,7 @@ const DomainAndHosting = () => {
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {item.id}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                 {item.type}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {item.hostingType || 'N/A'}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <span
@@ -380,14 +486,49 @@ const DomainAndHosting = () => {
                                   {status.text}
                                 </span>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {item.owner}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {formatDate(item.dates.expiryDate)}
-                              </td>
                               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <FiMoreVertical className="text-gray-400" size={16} />
+                                <div className="relative inline-block text-left">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleDropdownToggle(item.id, e)}
+                                    className="focus:outline-none"
+                                  >
+                                    <FiMoreVertical
+                                      className="text-gray-400 cursor-pointer hover:text-gray-600"
+                                      size={16}
+                                    />
+                                  </button>
+                                  {dropdownOpen === item.id && (
+                                    <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
+                                      <div className="py-1" role="menu" aria-orientation="vertical">
+                                        <button
+                                          onClick={() => handleView(item)}
+                                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                                          role="menuitem"
+                                        >
+                                          <FiEye className="mr-2" size={16} />
+                                          View Details
+                                        </button>
+                                        <button
+                                          onClick={() => handleEdit(item)}
+                                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                                          role="menuitem"
+                                        >
+                                          <FiEdit className="mr-2" size={16} />
+                                          Edit
+                                        </button>
+                                        <button
+                                          onClick={() => handleDelete(item.id)}
+                                          className="flex items-center px-4 py-2 text-sm text-red-700 hover:bg-gray-100 w-full text-left"
+                                          role="menuitem"
+                                        >
+                                          <FiTrash className="mr-2" size={16} />
+                                          Delete
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           );
@@ -400,6 +541,221 @@ const DomainAndHosting = () => {
             </Tab.Panels>
           </Tab.Group>
         </div>
+
+        {/* View Modal */}
+        {showModal && selectedItem && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-lg w-full max-w-md">
+              {/* Header */}
+              <div className="bg-indigo-800 text-white p-3 rounded-t-lg flex justify-between items-center">
+                <h2 className="text-xl font-bold">Item Details</h2>
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="text-white hover:text-gray-200 focus:outline-none"
+                >
+                  <FiX size={20} />
+                </button>
+              </div>
+
+              {/* Item status badge and name */}
+              <div className="bg-indigo-800 text-white px-3 pb-3 flex items-center">
+                <span
+                  className={`px-3 py-1 rounded-full text-sm font-medium ${getStatus(
+                    selectedItem.dates.expiryDate
+                  ).color}`}
+                >
+                  {getStatus(selectedItem.dates.expiryDate).text}
+                </span>
+                <span className="text-lg ml-2">{selectedItem.name}</span>
+              </div>
+
+              {/* Item Information Section */}
+              <div className="p-4">
+                <div className="flex items-start mb-4">
+                  <div className="bg-indigo-100 p-2 rounded-lg mr-3">
+                    <svg
+                      className="w-5 h-5 text-indigo-700"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6zM16 7a1 1 0 10-2 0v1h-1a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1V7z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                      Item Information
+                    </h3>
+                    <div className="grid grid-cols-2 gap-y-2 text-sm">
+                      <div className="text-gray-500">ID</div>
+                      <div className="text-right font-medium">{selectedItem.id}</div>
+                      <div className="text-gray-500">Type</div>
+                      <div className="text-right font-medium">{selectedItem.type}</div>
+                      <div className="text-gray-500">Hosting Type</div>
+                      <div className="text-right font-medium">
+                        {selectedItem.hostingType || 'N/A'}
+                      </div>
+                      <div className="text-gray-500">Expiry Date</div>
+                      <div className="text-right font-medium">
+                        {formatDate(selectedItem.dates.expiryDate)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Owner Information Section */}
+                <div className="flex items-start">
+                  <div className="bg-purple-100 p-2 rounded-lg mr-3">
+                    <svg
+                      className="w-5 h-5 text-purple-700"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                      Owner Information
+                    </h3>
+                    <div className="grid grid-cols-2 gap-y-2 text-sm">
+                      <div className="text-gray-500">Name</div>
+                      <div className="text-right font-medium">{selectedItem.owner}</div>
+                      <div className="text-gray-500">Email</div>
+                      <div className="text-right font-medium truncate">
+                        {selectedItem.ownerEmail}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer button */}
+              <div className="p-3 rounded-b-lg">
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="w-full py-2 bg-indigo-800 text-white font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-sm"
+                >
+                  Close Details
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Modal */}
+        {showEditModal && editingItem && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl">
+              <div className="p-4">
+                <h2 className="text-xl font-bold mb-4">Edit Item</h2>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-gray-700 text-sm mb-1">Name</label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={editingItem.name}
+                      onChange={handleEditChange}
+                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 text-sm mb-1">Type</label>
+                    <select
+                      name="type"
+                      value={editingItem.type}
+                      onChange={handleEditChange}
+                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                      <option value="Domain">Domain</option>
+                      <option value="Hosting">Hosting</option>
+                      <option value="Domain & Hosting">Domain & Hosting</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 text-sm mb-1">Hosting Type</label>
+                    <select
+                      name="hostingType"
+                      value={editingItem.hostingType || ''}
+                      onChange={handleEditChange}
+                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                      <option value="">N/A</option>
+                      <option value="VPS">VPS</option>
+                      <option value="Dedicated">Dedicated</option>
+                      <option value="Shared">Shared</option>
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-gray-700 text-sm mb-1">Owner First Name</label>
+                      <input
+                        type="text"
+                        name="ownerFirstName"
+                        value={editingItem.ownerFirstName}
+                        onChange={handleEditChange}
+                        className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-700 text-sm mb-1">Owner Last Name</label>
+                      <input
+                        type="text"
+                        name="ownerLastName"
+                        value={editingItem.ownerLastName}
+                        onChange={handleEditChange}
+                        className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 text-sm mb-1">Owner Email</label>
+                    <input
+                      type="email"
+                      name="ownerEmail"
+                      value={editingItem.ownerEmail}
+                      onChange={handleEditChange}
+                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 text-sm mb-1">Expiry Date</label>
+                    <input
+                      type="date"
+                      name="expiryDate"
+                      value={formatDateForInput(editingItem.dates.expiryDate)}
+                      onChange={(e) =>
+                        setEditingItem((prev) => ({
+                          ...prev,
+                          dates: { expiryDate: e.target.value },
+                        }))
+                      }
+                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-4">
+                  <button
+                    onClick={() => setShowEditModal(false)}
+                    className="w-full py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-md focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-gray-500"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleEditSubmit}
+                    className="w-full py-2 bg-indigo-800 hover:bg-indigo-900 text-white text-sm font-medium rounded-md focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-indigo-500"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Loading and Error States */}
         {loading && (
@@ -425,7 +781,7 @@ const DomainAndHosting = () => {
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                 ></path>
               </svg>
-              Loading data...
+              Processing...
             </div>
           </div>
         )}
