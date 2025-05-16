@@ -1,10 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FiSearch, FiMoreVertical, FiX, FiEye, FiEdit, FiTrash } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
-import Input from '../components/ui/Input';
-import Button from '../components/ui/Button';
-import DatePicker from 'react-datepicker';
-import 'react-datepicker/dist/react-datepicker.css';
+import { toast } from 'react-toastify';
 
 // Mock data for Birthdays
 const mockData = [
@@ -59,7 +56,6 @@ const Birthdays = () => {
   const [editingPerson, setEditingPerson] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(null);
   const [formErrors, setFormErrors] = useState({});
-  const [notification, setNotification] = useState({ show: false, type: '', message: '' });
 
   // Simulate email notification for birthdays within 7 days
   const checkBirthdays = () => {
@@ -111,15 +107,6 @@ const Birthdays = () => {
     filterData();
   }, [searchQuery]);
 
-  useEffect(() => {
-    if (notification.show) {
-      const timer = setTimeout(() => {
-        setNotification({ show: false, type: '', message: '' });
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [notification.show]);
-
   const handleSearch = (e) => {
     setSearchQuery(e.target.value);
   };
@@ -129,7 +116,7 @@ const Birthdays = () => {
   };
 
   const handleEdit = (person) => {
-    setEditingPerson({ ...person, birthdayFull: new Date(person.birthdayFull) });
+    setEditingPerson({ ...person });
     setShowEditModal(true);
     setDropdownOpen(null);
   };
@@ -139,13 +126,6 @@ const Birthdays = () => {
     setEditingPerson((prev) => ({ ...prev, [name]: value }));
     if (formErrors[name]) {
       setFormErrors((prev) => ({ ...prev, [name]: '' }));
-    }
-  };
-
-  const handleDateChange = (date) => {
-    setEditingPerson((prev) => ({ ...prev, birthdayFull: date }));
-    if (formErrors.birthdayFull) {
-      setFormErrors((prev) => ({ ...prev, birthdayFull: '' }));
     }
   };
 
@@ -164,35 +144,34 @@ const Birthdays = () => {
     return errors;
   };
 
-  const showNotification = (type, message) => {
-    setNotification({ show: true, type, message });
-  };
-
   const handleEditSubmit = (e) => {
     e.preventDefault();
     const errors = validateEditForm();
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
-      showNotification('error', 'Please fix form errors before submitting');
+      toast.error('Please fix form errors before submitting', {
+        position: 'top-right',
+        autoClose: 2000,
+      });
       return;
     }
 
     const updatedPerson = {
       ...editingPerson,
       birthday: editingPerson.birthdayFull
-        ? `${String(editingPerson.birthdayFull.getDate()).padStart(2, '0')}/${String(
-            editingPerson.birthdayFull.getMonth() + 1
+        ? `${String(new Date(editingPerson.birthdayFull).getDate()).padStart(2, '0')}/${String(
+            new Date(editingPerson.birthdayFull).getMonth() + 1
           ).padStart(2, '0')}`
         : editingPerson.birthday,
-      birthdayFull: editingPerson.birthdayFull
-        ? editingPerson.birthdayFull.toISOString().split('T')[0]
-        : editingPerson.birthdayFull,
     };
 
     setData((prev) =>
       prev.map((item) => (item.id === updatedPerson.id ? updatedPerson : item))
     );
-    showNotification('success', 'Birthday updated successfully!');
+    toast.success('Birthday updated successfully!', {
+      position: 'top-right',
+      autoClose: 2000,
+    });
     setShowEditModal(false);
     setEditingPerson(null);
     setFormErrors({});
@@ -204,8 +183,16 @@ const Birthdays = () => {
       const updatedData = data.filter((item) => item.id !== id);
       setData(updatedData);
       setDropdownOpen(null);
+      toast.success('Birthday deleted successfully!', {
+        position: 'top-right',
+        autoClose: 2000,
+      });
     } catch (err) {
       setError(err.message || 'Failed to delete person');
+      toast.error('Failed to delete birthday', {
+        position: 'top-right',
+        autoClose: 2000,
+      });
     } finally {
       setLoading(false);
     }
@@ -216,38 +203,6 @@ const Birthdays = () => {
     setShowViewModal(true);
     setDropdownOpen(null);
   };
-
-  const CustomDateInput = React.forwardRef(({ value, onClick, disabled }, ref) => (
-    <button
-      className={`
-        w-full px-3 py-2 text-xs text-left border border-gray-300 rounded-lg
-        focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white
-        ${disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}
-      `}
-      onClick={onClick}
-      ref={ref}
-      type="button"
-      disabled={disabled}
-    >
-      {value || 'Select date'}
-      {!disabled && (
-        <svg
-          className="w-4 h-4 absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-          />
-        </svg>
-      )}
-    </button>
-  ));
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -462,251 +417,152 @@ const Birthdays = () => {
         {/* Edit Modal */}
         {showEditModal && editingPerson && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl p-6">
-              {notification.show && (
-                <div
-                  className={`mb-4 p-3 rounded-lg ${
-                    notification.type === 'success'
-                      ? 'bg-green-100 border border-green-200 text-green-800'
-                      : 'bg-red-100 border border-red-200 text-red-800'
-                  }`}
-                >
-                  {notification.message}
+            <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl p-4">
+              <h2 className="text-xl font-bold mb-4">Edit Birthday</h2>
+              
+              <form onSubmit={handleEditSubmit} className="space-y-3">
+                <div>
+                  <label className="block text-gray-700 text-sm mb-1">Full Name</label>
+                  <input
+                    type="text"
+                    name="fullName"
+                    value={editingPerson.fullName}
+                    onChange={handleEditChange}
+                    required
+                    placeholder="e.g., John Doe"
+                    className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                  {formErrors.fullName && (
+                    <p className="mt-1 text-xs text-red-500">{formErrors.fullName}</p>
+                  )}
                 </div>
-              )}
-
-              {/* Header */}
-              <div className="flex justify-between items-center mb-6 border-b pb-4">
-                <h2 className="text-2xl font-bold text-gray-800">Edit Birthday</h2>
-                <button
-                  onClick={() => {
-                    setShowEditModal(false);
-                    setEditingPerson(null);
-                    setFormErrors({});
-                    setNotification({ show: false, type: '', message: '' });
-                  }}
-                  className="text-gray-600 hover:text-gray-800 focus:outline-none"
-                >
-                  <FiX size={20} />
-                </button>
-              </div>
-
-              {/* Form */}
-              <form onSubmit={handleEditSubmit} className="space-y-6">
-                {/* Personal Info */}
-                <div className="space-y-4">
-                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
-                    Personal Information
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Input
-                        label="Full Name"
-                        name="fullName"
-                        value={editingPerson.fullName}
-                        onChange={handleEditChange}
-                        required
-                        placeholder="e.g., John Doe"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      {formErrors.fullName && (
-                        <p className="mt-1 text-xs text-red-500">{formErrors.fullName}</p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Birthday</label>
-                      <DatePicker
-                        selected={editingPerson.birthdayFull}
-                        onChange={handleDateChange}
-                        customInput={<CustomDateInput />}
-                        dateFormat="MMMM d, yyyy"
-                        className="w-full"
-                        popperPlacement="bottom-start"
-                        required
-                      />
-                      {formErrors.birthdayFull && (
-                        <p className="mt-1 text-xs text-red-500">{formErrors.birthdayFull}</p>
-                      )}
-                    </div>
+                
+                <div>
+                  <label className="block text-gray-700 text-sm mb-1">Birthday</label>
+                  <input
+                    type="date"
+                    name="birthdayFull"
+                    value={editingPerson.birthdayFull}
+                    onChange={handleEditChange}
+                    required
+                    className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                  {formErrors.birthdayFull && (
+                    <p className="mt-1 text-xs text-red-500">{formErrors.birthdayFull}</p>
+                  )}
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-gray-700 text-sm mb-1">Primary Telephone</label>
+                    <input
+                      type="tel"
+                      name="telephone1"
+                      value={editingPerson.telephone1}
+                      onChange={handleEditChange}
+                      required
+                      placeholder="e.g., +1234567890"
+                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    {formErrors.telephone1 && (
+                      <p className="mt-1 text-xs text-red-500">{formErrors.telephone1}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 text-sm mb-1">Secondary Telephone (Optional)</label>
+                    <input
+                      type="tel"
+                      name="telephone2"
+                      value={editingPerson.telephone2}
+                      onChange={handleEditChange}
+                      placeholder="e.g., +1234567891"
+                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
                   </div>
                 </div>
-
-                {/* Contact Info */}
-                <div className="space-y-4">
-                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
-                    Contact Details
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Input
-                        label="Primary Telephone"
-                        name="telephone1"
-                        type="tel"
-                        value={editingPerson.telephone1}
-                        onChange={handleEditChange}
-                        required
-                        placeholder="e.g., +1234567890"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      {formErrors.telephone1 && (
-                        <p className="mt-1 text-xs text-red-500">{formErrors.telephone1}</p>
-                      )}
-                    </div>
-                    <div>
-                      <Input
-                        label="Secondary Telephone (Optional)"
-                        name="telephone2"
-                        type="tel"
-                        value={editingPerson.telephone2}
-                        onChange={handleEditChange}
-                        placeholder="e.g., +1234567891"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <Input
-                        label="Email"
-                        name="email"
-                        type="email"
-                        value={editingPerson.email}
-                        onChange={handleEditChange}
-                        required
-                        placeholder="e.g., john.doe@example.com"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      {formErrors.email && (
-                        <p className="mt-1 text-xs text-red-500">{formErrors.email}</p>
-                      )}
-                    </div>
+                
+                <div>
+                  <label className="block text-gray-700 text-sm mb-1">Email</label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={editingPerson.email}
+                    onChange={handleEditChange}
+                    required
+                    placeholder="e.g., john.doe@example.com"
+                    className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                  {formErrors.email && (
+                    <p className="mt-1 text-xs text-red-500">{formErrors.email}</p>
+                  )}
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-gray-700 text-sm mb-1">Next of Kin Name</label>
+                    <input
+                      type="text"
+                      name="nextOfKin"
+                      value={editingPerson.nextOfKin}
+                      onChange={handleEditChange}
+                      required
+                      placeholder="e.g., Jane Doe"
+                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    {formErrors.nextOfKin && (
+                      <p className="mt-1 text-xs text-red-500">{formErrors.nextOfKin}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 text-sm mb-1">Next of Kin Telephone 1</label>
+                    <input
+                      type="tel"
+                      name="nokTelephone1"
+                      value={editingPerson.nokTelephone1}
+                      onChange={handleEditChange}
+                      required
+                      placeholder="e.g., +1234567892"
+                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    {formErrors.nokTelephone1 && (
+                      <p className="mt-1 text-xs text-red-500">{formErrors.nokTelephone1}</p>
+                    )}
                   </div>
                 </div>
-
-                {/* Next of Kin Info */}
-                <div className="space-y-4">
-                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
-                    Next of Kin
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Input
-                        label="Next of Kin Name"
-                        name="nextOfKin"
-                        value={editingPerson.nextOfKin}
-                        onChange={handleEditChange}
-                        required
-                        placeholder="e.g., Jane Doe"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      {formErrors.nextOfKin && (
-                        <p className="mt-1 text-xs text-red-500">{formErrors.nextOfKin}</p>
-                      )}
-                    </div>
-                    <div>
-                      <Input
-                        label="Next of Kin Telephone 1"
-                        name="nokTelephone1"
-                        type="tel"
-                        value={editingPerson.nokTelephone1}
-                        onChange={handleEditChange}
-                        required
-                        placeholder="e.g., +1234567892"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      {formErrors.nokTelephone1 && (
-                        <p className="mt-1 text-xs text-red-500">{formErrors.nokTelephone1}</p>
-                      )}
-                    </div>
-                    <div>
-                      <Input
-                        label="Next of Kin Telephone 2 (Optional)"
-                        name="nokTelephone2"
-                        type="tel"
-                        value={editingPerson.nokTelephone2}
-                        onChange={handleEditChange}
-                        placeholder="e.g., +1234567893"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  </div>
+                
+                <div>
+                  <label className="block text-gray-700 text-sm mb-1">Next of Kin Telephone 2 (Optional)</label>
+                  <input
+                    type="tel"
+                    name="nokTelephone2"
+                    value={editingPerson.nokTelephone2}
+                    onChange={handleEditChange}
+                    placeholder="e.g., +1234567893"
+                    className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
                 </div>
 
-                {/* Buttons */}
-                <div className="flex flex-col sm:flex-row justify-end gap-3 pt-6 border-t">
-                  <Button
+                <div className="mt-4 grid grid-cols-2 gap-4">
+                  <button
                     type="button"
                     onClick={() => {
                       setShowEditModal(false);
                       setEditingPerson(null);
                       setFormErrors({});
-                      setNotification({ show: false, type: '', message: '' });
                     }}
-                    className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium px-6 py-2 rounded-lg transition-colors text-xs"
+                    className="w-full py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-md focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-gray-500"
                   >
                     Cancel
-                  </Button>
-                  <Button
+                  </button>
+                  <button
                     type="submit"
-                    className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium px-6 py-2 rounded-lg transition-all shadow-md hover:shadow-lg text-xs"
+                    className="w-full py-2 bg-indigo-800 hover:bg-indigo-900 text-white text-sm font-medium rounded-md focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-indigo-500"
                     disabled={Object.keys(formErrors).length > 0}
                   >
                     Save Changes
-                  </Button>
+                  </button>
                 </div>
               </form>
-
-              <style
-                dangerouslySetInnerHTML={{
-                  __html: `
-                  .react-datepicker {
-                    font-family: "Inter", sans-serif;
-                    border: 1px solid #e5e7eb;
-                    border-radius: 0.5rem;
-                    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
-                      0 2px 4px -1px rgba(0, 0, 0, 0.06);
-                  }
-                  .react-datepicker__header {
-                    background-color: #f9fafb;
-                    border-bottom: 1px solid #e5e7eb;
-                    border-top-left-radius: 0.5rem;
-                    border-top-right-radius: 0.5rem;
-                    padding-top: 0.5rem;
-                  }
-                  .react-datepicker__current-month {
-                    font-weight: 600;
-                    color: #111827;
-                  }
-                  .react-datepicker__day-name {
-                    color: #6b7280;
-                    font-weight: 500;
-                  }
-                  .react-datepicker__day {
-                    color: #111827;
-                    margin: 0.2rem;
-                  }
-                  .react-datepicker__day--selected {
-                    background-color: #3b82f6;
-                    color: white;
-                    border-radius: 0.375rem;
-                  }
-                  .react-datepicker__day--selected:hover {
-                    background-color: #2563eb;
-                  }
-                  .react-datepicker__day:hover {
-                    border-radius: 0.375rem;
-                    background-color: #f3f4f6;
-                  }
-                  .react-datepicker__navigation {
-                    top: 0.5rem;
-                  }
-                  .react-datepicker__navigation--previous {
-                    left: 1rem;
-                  }
-                  .react-datepicker__navigation--next {
-                    right: 1rem;
-                  }
-                `,
-                }}
-              />
             </div>
           </div>
         )}
