@@ -1190,11 +1190,11 @@ const Hosting = () => {
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
     <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl">
       <div className="p-4">
-        <h2 className="text-xl font-bold mb-4">Edit Domain</h2>
+        <h2 className="text-xl font-bold mb-4">Edit Hosting</h2>
         
         <div className="space-y-3">
           <div>
-            <label className="block text-gray-700 text-sm mb-1">Domain Name</label>
+            <label className="block text-gray-700 text-sm mb-1">Hosting Name</label>
             <input
               type="text"
               name="name"

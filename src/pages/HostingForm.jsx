@@ -381,7 +381,7 @@ const HostingForm = ({ initialData, onCancel }) => {
           <div className="grid grid-cols-1 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Domain Name
+                Hosting Name
               </label>
               <div className="relative">
                 <input

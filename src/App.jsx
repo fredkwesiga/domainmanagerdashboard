@@ -17,7 +17,8 @@ import CompanyExpenses from './pages/CompanyExpenses';
 import Birthdays from './pages/Birthdays';
 import UserManagement from './pages/UserManagement';
 import HostingForm from './pages/HostingForm';
-
+import BirthdayForm from './pages/BirthdayForm';
+import Profile from './pages/Profile';
 import { NotificationProvider } from './components/layout/NotificationContext';
 
 // Simple auth check
@@ -84,7 +85,6 @@ const ProtectedRoute = ({ children, requiredPermission, superAdminOnly = false }
 };
 
 // Wrapper to debug navigation
-
 const DebugNavigation = ({ children }) => {
   const location = useLocation();
 
@@ -95,35 +95,6 @@ const DebugNavigation = ({ children }) => {
 
   return children;
 };
-
-// const DebugNavigation = ({ children }) => {
-//   const location = useLocation();
-
-//   useEffect(() => {
-//     console.log('DebugNavigation: Current route:', location.pathname);
-//   }, [location]);
-
-//   useEffect(() => {
-//     const userRole = localStorage.getItem('userRole');
-//     const userEmail = localStorage.getItem('userEmail');
-//     console.log('DebugNavigation: Setting permissions for', { userRole, userEmail });
-//     if (!localStorage.getItem('userPermissions')) {
-//       const mockPermissions = {
-//         'admin1@tekjuice.co.uk': { dashboard: true, domains: true, hosting: false, subscriptions: false },
-//         'admin2@tekjuice.co.uk': { dashboard: true, domains: false, hosting: true, subscriptions: false },
-//         'admin@tekjuice.co.uk': { dashboard: true, domains: true, hosting: true, subscriptions: true },
-//         'superadmin@tekjuice.co.uk': { dashboard: true, domains: true, hosting: true, subscriptions: true, settings: true },
-//       };
-//       const permissions = mockPermissions[userEmail] || { dashboard: true, domains: false, hosting: false, subscriptions: false };
-//       console.log('DebugNavigation: Setting userPermissions=', permissions);
-//       localStorage.setItem('userPermissions', JSON.stringify(permissions));
-//     } else {
-//       console.log('DebugNavigation: userPermissions already set=', JSON.parse(localStorage.getItem('userPermissions')));
-//     }
-//   }, []);
-
-//   return children;
-// };
 
 const App = () => {
   console.log('App: isAuthenticated=', isAuthenticated());
@@ -240,6 +211,22 @@ const App = () => {
             }
           />
           <Route
+            path="birthdays/add"
+            element={
+              <ProtectedRoute requiredPermission="birthdays">
+                <BirthdayForm />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="birthdays/edit/:id"
+            element={
+              <ProtectedRoute requiredPermission="birthdays">
+                <BirthdayForm />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="expense-sync"
             element={
               <ProtectedRoute superAdminOnly={true} requiredPermission="expenseSync">
@@ -247,11 +234,19 @@ const App = () => {
               </ProtectedRoute>
             }
           />
-           <Route
+          <Route
             path="/hosting/add"
             element={
               <ProtectedRoute requiredPermission="hosting">
                 <HostingForm />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
               </ProtectedRoute>
             }
           />

@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { FiSearch, FiMoreVertical, FiX } from 'react-icons/fi';
+import { FiSearch, FiMoreVertical, FiX, FiEye, FiEdit, FiTrash } from 'react-icons/fi';
+import { useNavigate } from 'react-router-dom';
+import Input from '../components/ui/Input';
+import Button from '../components/ui/Button';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 
 // Mock data for Birthdays
 const mockData = [
@@ -42,23 +47,19 @@ const mockData = [
 ];
 
 const Birthdays = () => {
+  const navigate = useNavigate();
   const [data, setData] = useState(mockData);
   const [filteredData, setFilteredData] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({
-    fullName: '',
-    birthdayFull: '',
-    telephone1: '',
-    telephone2: '',
-    email: '',
-    nextOfKin: '',
-    nokTelephone1: '',
-    nokTelephone2: '',
-  });
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedPerson, setSelectedPerson] = useState(null);
+  const [editingPerson, setEditingPerson] = useState(null);
+  const [dropdownOpen, setDropdownOpen] = useState(null);
   const [formErrors, setFormErrors] = useState({});
+  const [notification, setNotification] = useState({ show: false, type: '', message: '' });
 
   // Simulate email notification for birthdays within 7 days
   const checkBirthdays = () => {
@@ -110,94 +111,143 @@ const Birthdays = () => {
     filterData();
   }, [searchQuery]);
 
+  useEffect(() => {
+    if (notification.show) {
+      const timer = setTimeout(() => {
+        setNotification({ show: false, type: '', message: '' });
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification.show]);
+
   const handleSearch = (e) => {
     setSearchQuery(e.target.value);
   };
 
-  // Modal form handlers
-  const handleFormChange = (e) => {
+  const handleAdd = () => {
+    navigate('/birthdays/add');
+  };
+
+  const handleEdit = (person) => {
+    setEditingPerson({ ...person, birthdayFull: new Date(person.birthdayFull) });
+    setShowEditModal(true);
+    setDropdownOpen(null);
+  };
+
+  const handleEditChange = (e) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
-    // Clear error for the field when user types
+    setEditingPerson((prev) => ({ ...prev, [name]: value }));
     if (formErrors[name]) {
-      setFormErrors({ ...formErrors, [name]: '' });
+      setFormErrors((prev) => ({ ...prev, [name]: '' }));
     }
   };
 
-  const validateForm = () => {
+  const handleDateChange = (date) => {
+    setEditingPerson((prev) => ({ ...prev, birthdayFull: date }));
+    if (formErrors.birthdayFull) {
+      setFormErrors((prev) => ({ ...prev, birthdayFull: '' }));
+    }
+  };
+
+  const validateEditForm = () => {
     const errors = {};
-    if (!formData.fullName.trim()) errors.fullName = 'Full Name is required';
-    if (!formData.birthdayFull) errors.birthdayFull = 'Birthday is required';
-    if (!formData.telephone1.trim()) errors.telephone1 = 'Telephone 1 is required';
-    if (!formData.email.trim()) {
+    if (!editingPerson.fullName.trim()) errors.fullName = 'Full Name is required';
+    if (!editingPerson.birthdayFull) errors.birthdayFull = 'Birthday is required';
+    if (!editingPerson.telephone1.trim()) errors.telephone1 = 'Telephone 1 is required';
+    if (!editingPerson.email.trim()) {
       errors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+    } else if (!/\S+@\S+\.\S+/.test(editingPerson.email)) {
       errors.email = 'Invalid email format';
     }
-    if (!formData.nextOfKin.trim()) errors.nextOfKin = 'Next of Kin is required';
-    if (!formData.nokTelephone1.trim()) errors.nokTelephone1 = 'Next of Kin Telephone 1 is required';
+    if (!editingPerson.nextOfKin.trim()) errors.nextOfKin = 'Next of Kin is required';
+    if (!editingPerson.nokTelephone1.trim()) errors.nokTelephone1 = 'Next of Kin Telephone 1 is required';
     return errors;
   };
 
-  const handleFormSubmit = (e) => {
+  const showNotification = (type, message) => {
+    setNotification({ show: true, type, message });
+  };
+
+  const handleEditSubmit = (e) => {
     e.preventDefault();
-    const errors = validateForm();
+    const errors = validateEditForm();
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
+      showNotification('error', 'Please fix form errors before submitting');
       return;
     }
 
-    // Format birthday to DD/MM
-    const date = new Date(formData.birthdayFull);
-    const birthday = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
-
-    // Generate unique ID
-    const newId = `B${String(data.length + 1).padStart(3, '0')}`;
-
-    // Create new entry
-    const newEntry = {
-      id: newId,
-      fullName: formData.fullName,
-      birthday,
-      birthdayFull: formData.birthdayFull,
-      telephone1: formData.telephone1,
-      telephone2: formData.telephone2 || '',
-      email: formData.email,
-      nextOfKin: formData.nextOfKin,
-      nokTelephone1: formData.nokTelephone1,
-      nokTelephone2: formData.nokTelephone2 || '',
+    const updatedPerson = {
+      ...editingPerson,
+      birthday: editingPerson.birthdayFull
+        ? `${String(editingPerson.birthdayFull.getDate()).padStart(2, '0')}/${String(
+            editingPerson.birthdayFull.getMonth() + 1
+          ).padStart(2, '0')}`
+        : editingPerson.birthday,
+      birthdayFull: editingPerson.birthdayFull
+        ? editingPerson.birthdayFull.toISOString().split('T')[0]
+        : editingPerson.birthdayFull,
     };
 
-    // Update data
-    setData([...data, newEntry]);
-    setShowModal(false);
-    setFormData({
-      fullName: '',
-      birthdayFull: '',
-      telephone1: '',
-      telephone2: '',
-      email: '',
-      nextOfKin: '',
-      nokTelephone1: '',
-      nokTelephone2: '',
-    });
+    setData((prev) =>
+      prev.map((item) => (item.id === updatedPerson.id ? updatedPerson : item))
+    );
+    showNotification('success', 'Birthday updated successfully!');
+    setShowEditModal(false);
+    setEditingPerson(null);
     setFormErrors({});
   };
 
-  const closeModal = () => {
-    setShowModal(false);
-    setFormData({
-      fullName: '',
-      birthdayFull: '',
-      telephone1: '',
-      telephone2: '',
-      email: '',
-      nextOfKin: '',
-      nokTelephone1: '',
-      nokTelephone2: '',
-    });
-    setFormErrors({});
+  const handleDelete = async (id) => {
+    try {
+      setLoading(true);
+      const updatedData = data.filter((item) => item.id !== id);
+      setData(updatedData);
+      setDropdownOpen(null);
+    } catch (err) {
+      setError(err.message || 'Failed to delete person');
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const handleView = (person) => {
+    setSelectedPerson(person);
+    setShowViewModal(true);
+    setDropdownOpen(null);
+  };
+
+  const CustomDateInput = React.forwardRef(({ value, onClick, disabled }, ref) => (
+    <button
+      className={`
+        w-full px-3 py-2 text-xs text-left border border-gray-300 rounded-lg
+        focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white
+        ${disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}
+      `}
+      onClick={onClick}
+      ref={ref}
+      type="button"
+      disabled={disabled}
+    >
+      {value || 'Select date'}
+      {!disabled && (
+        <svg
+          className="w-4 h-4 absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+          />
+        </svg>
+      )}
+    </button>
+  ));
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -224,7 +274,7 @@ const Birthdays = () => {
               />
             </div>
             <button
-              onClick={() => setShowModal(true)}
+              onClick={handleAdd}
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-semibold rounded-md shadow-sm text-white bg-indigo-900 hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               + Add New Birthday
@@ -250,21 +300,6 @@ const Birthdays = () => {
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Telephone 1
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Telephone 2
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Email
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Next of Kin
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    NoK Telephone 1
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    NoK Telephone 2
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
                 </tr>
@@ -296,23 +331,44 @@ const Birthdays = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {person.telephone1}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {person.telephone2 || 'N/A'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {person.email}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {person.nextOfKin}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {person.nokTelephone1}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {person.nokTelephone2 || 'N/A'}
-                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <FiMoreVertical className="text-gray-400" size={16} />
+                      <div className="relative inline-block text-left">
+                        <FiMoreVertical
+                          className="text-gray-400 cursor-pointer"
+                          size={16}
+                          onClick={() => setDropdownOpen(dropdownOpen === person.id ? null : person.id)}
+                        />
+                        {dropdownOpen === person.id && (
+                          <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
+                            <div className="py-1" role="menu" aria-orientation="vertical">
+                              <button
+                                onClick={() => handleView(person)}
+                                className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                                role="menuitem"
+                              >
+                                <FiEye className="mr-2" size={16} />
+                                View Details
+                              </button>
+                              <button
+                                onClick={() => handleEdit(person)}
+                                className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                                role="menuitem"
+                              >
+                                <FiEdit className="mr-2" size={16} />
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDelete(person.id)}
+                                className="flex items-center px-4 py-2 text-sm text-red-700 hover:bg-gray-100 w-full text-left"
+                                role="menuitem"
+                              >
+                                <FiTrash className="mr-2" size={16} />
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -321,141 +377,336 @@ const Birthdays = () => {
           </div>
         </div>
 
-        {/* Modal */}
-        {showModal && (
+        {/* View Modal */}
+        {showViewModal && selectedPerson && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-lg w-full max-w-lg max-h-[80vh] overflow-y-auto">
-              <div className="flex justify-between items-center p-6 border-b border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-800">Add New Birthday</h2>
+            <div className="bg-white rounded-lg shadow-lg w-full max-w-md">
+              {/* Header */}
+              <div className="bg-indigo-800 text-white p-3 rounded-t-lg flex justify-between items-center">
+                <h2 className="text-xl font-bold">Birthday Details</h2>
                 <button
-                  onClick={closeModal}
-                  className="text-gray-400 hover:text-gray-600 focus:outline-none"
+                  onClick={() => setShowViewModal(false)}
+                  className="text-white hover:text-gray-200 focus:outline-none"
                 >
                   <FiX size={20} />
                 </button>
               </div>
-              <form onSubmit={handleFormSubmit} className="p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Full Name *</label>
-                  <input
-                    type="text"
-                    name="fullName"
-                    value={formData.fullName}
-                    onChange={handleFormChange}
-                    className={`mt-1 w-full px-3 py-2 border ${formErrors.fullName ? 'border-red-500' : 'border-gray-300'} rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500`}
-                    placeholder="e.g., John Doe"
-                  />
-                  {formErrors.fullName && (
-                    <p className="mt-1 text-xs text-red-600">{formErrors.fullName}</p>
-                  )}
+              
+              {/* Status badge and name */}
+              <div className="bg-indigo-800 text-white px-3 pb-3 flex items-center">
+                <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium mr-2">
+                  Active
+                </span>
+                <span className="text-lg">{selectedPerson.fullName}</span>
+              </div>
+              
+              {/* Personal Information Section */}
+              <div className="p-4">
+                <div className="flex items-start mb-4">
+                  <div className="bg-indigo-100 p-2 rounded-lg mr-3">
+                    <svg className="w-5 h-5 text-indigo-700" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-2">Personal Information</h3>
+                    <div className="grid grid-cols-2 gap-y-2 text-sm">
+                      <div className="text-gray-500">Full Name</div>
+                      <div className="text-right font-medium">{selectedPerson.fullName}</div>
+                      <div className="text-gray-500">Birthday</div>
+                      <div className="text-right font-medium">{selectedPerson.birthday}</div>
+                      <div className="text-gray-500">Telephone 1</div>
+                      <div className="text-right font-medium">{selectedPerson.telephone1}</div>
+                      <div className="text-gray-500">Telephone 2</div>
+                      <div className="text-right font-medium">{selectedPerson.telephone2 || 'N/A'}</div>
+                      <div className="text-gray-500">Email</div>
+                      <div className="text-right font-medium truncate">{selectedPerson.email}</div>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Birthday *</label>
-                  <input
-                    type="date"
-                    name="birthdayFull"
-                    value={formData.birthdayFull}
-                    onChange={handleFormChange}
-                    className={`mt-1 w-full px-3 py-2 border ${formErrors.birthdayFull ? 'border-red-500' : 'border-gray-300'} rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500`}
-                  />
-                  {formErrors.birthdayFull && (
-                    <p className="mt-1 text-xs text-red-600">{formErrors.birthdayFull}</p>
-                  )}
+                
+                {/* Next of Kin Section */}
+                <div className="flex items-start">
+                  <div className="bg-purple-100 p-2 rounded-lg mr-3">
+                    <svg className="w-5 h-5 text-purple-700" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-2">Next of Kin</h3>
+                    <div className="grid grid-cols-2 gap-y-2 text-sm">
+                      <div className="text-gray-500">Name</div>
+                      <div className="text-right font-medium">{selectedPerson.nextOfKin}</div>
+                      <div className="text-gray-500">Telephone 1</div>
+                      <div className="text-right font-medium">{selectedPerson.nokTelephone1}</div>
+                      <div className="text-gray-500">Telephone 2</div>
+                      <div className="text-right font-medium">{selectedPerson.nokTelephone2 || 'N/A'}</div>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Telephone 1 *</label>
-                  <input
-                    type="tel"
-                    name="telephone1"
-                    value={formData.telephone1}
-                    onChange={handleFormChange}
-                    className={`mt-1 w-full px-3 py-2 border ${formErrors.telephone1 ? 'border-red-500' : 'border-gray-300'} rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500`}
-                    placeholder="e.g., +1234567890"
-                  />
-                  {formErrors.telephone1 && (
-                    <p className="mt-1 text-xs text-red-600">{formErrors.telephone1}</p>
-                  )}
+              </div>
+              
+              {/* Footer button */}
+              <div className="p-3 rounded-b-lg">
+                <button
+                  onClick={() => setShowViewModal(false)}
+                  className="w-full py-2 bg-indigo-800 text-white font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-sm"
+                >
+                  Close Overview
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Modal */}
+        {showEditModal && editingPerson && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl p-6">
+              {notification.show && (
+                <div
+                  className={`mb-4 p-3 rounded-lg ${
+                    notification.type === 'success'
+                      ? 'bg-green-100 border border-green-200 text-green-800'
+                      : 'bg-red-100 border border-red-200 text-red-800'
+                  }`}
+                >
+                  {notification.message}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Telephone 2</label>
-                  <input
-                    type="tel"
-                    name="telephone2"
-                    value={formData.telephone2}
-                    onChange={handleFormChange}
-                    className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder="e.g., +1234567891"
-                  />
+              )}
+
+              {/* Header */}
+              <div className="flex justify-between items-center mb-6 border-b pb-4">
+                <h2 className="text-2xl font-bold text-gray-800">Edit Birthday</h2>
+                <button
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditingPerson(null);
+                    setFormErrors({});
+                    setNotification({ show: false, type: '', message: '' });
+                  }}
+                  className="text-gray-600 hover:text-gray-800 focus:outline-none"
+                >
+                  <FiX size={20} />
+                </button>
+              </div>
+
+              {/* Form */}
+              <form onSubmit={handleEditSubmit} className="space-y-6">
+                {/* Personal Info */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                    Personal Information
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Input
+                        label="Full Name"
+                        name="fullName"
+                        value={editingPerson.fullName}
+                        onChange={handleEditChange}
+                        required
+                        placeholder="e.g., John Doe"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      {formErrors.fullName && (
+                        <p className="mt-1 text-xs text-red-500">{formErrors.fullName}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Birthday</label>
+                      <DatePicker
+                        selected={editingPerson.birthdayFull}
+                        onChange={handleDateChange}
+                        customInput={<CustomDateInput />}
+                        dateFormat="MMMM d, yyyy"
+                        className="w-full"
+                        popperPlacement="bottom-start"
+                        required
+                      />
+                      {formErrors.birthdayFull && (
+                        <p className="mt-1 text-xs text-red-500">{formErrors.birthdayFull}</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Email *</label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleFormChange}
-                    className={`mt-1 w-full px-3 py-2 border ${formErrors.email ? 'border-red-500' : 'border-gray-300'} rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500`}
-                    placeholder="e.g., john.doe@tekjuice.co.uk"
-                  />
-                  {formErrors.email && (
-                    <p className="mt-1 text-xs text-red-600">{formErrors.email}</p>
-                  )}
+
+                {/* Contact Info */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                    Contact Details
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Input
+                        label="Primary Telephone"
+                        name="telephone1"
+                        type="tel"
+                        value={editingPerson.telephone1}
+                        onChange={handleEditChange}
+                        required
+                        placeholder="e.g., +1234567890"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      {formErrors.telephone1 && (
+                        <p className="mt-1 text-xs text-red-500">{formErrors.telephone1}</p>
+                      )}
+                    </div>
+                    <div>
+                      <Input
+                        label="Secondary Telephone (Optional)"
+                        name="telephone2"
+                        type="tel"
+                        value={editingPerson.telephone2}
+                        onChange={handleEditChange}
+                        placeholder="e.g., +1234567891"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <Input
+                        label="Email"
+                        name="email"
+                        type="email"
+                        value={editingPerson.email}
+                        onChange={handleEditChange}
+                        required
+                        placeholder="e.g., john.doe@example.com"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      {formErrors.email && (
+                        <p className="mt-1 text-xs text-red-500">{formErrors.email}</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Next of Kin *</label>
-                  <input
-                    type="text"
-                    name="nextOfKin"
-                    value={formData.nextOfKin}
-                    onChange={handleFormChange}
-                    className={`mt-1 w-full px-3 py-2 border ${formErrors.nextOfKin ? 'border-red-500' : 'border-gray-300'} rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500`}
-                    placeholder="e.g., Jane Doe"
-                  />
-                  {formErrors.nextOfKin && (
-                    <p className="mt-1 text-xs text-red-600">{formErrors.nextOfKin}</p>
-                  )}
+
+                {/* Next of Kin Info */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                    Next of Kin
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Input
+                        label="Next of Kin Name"
+                        name="nextOfKin"
+                        value={editingPerson.nextOfKin}
+                        onChange={handleEditChange}
+                        required
+                        placeholder="e.g., Jane Doe"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      {formErrors.nextOfKin && (
+                        <p className="mt-1 text-xs text-red-500">{formErrors.nextOfKin}</p>
+                      )}
+                    </div>
+                    <div>
+                      <Input
+                        label="Next of Kin Telephone 1"
+                        name="nokTelephone1"
+                        type="tel"
+                        value={editingPerson.nokTelephone1}
+                        onChange={handleEditChange}
+                        required
+                        placeholder="e.g., +1234567892"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      {formErrors.nokTelephone1 && (
+                        <p className="mt-1 text-xs text-red-500">{formErrors.nokTelephone1}</p>
+                      )}
+                    </div>
+                    <div>
+                      <Input
+                        label="Next of Kin Telephone 2 (Optional)"
+                        name="nokTelephone2"
+                        type="tel"
+                        value={editingPerson.nokTelephone2}
+                        onChange={handleEditChange}
+                        placeholder="e.g., +1234567893"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Next of Kin Telephone 1 *</label>
-                  <input
-                    type="tel"
-                    name="nokTelephone1"
-                    value={formData.nokTelephone1}
-                    onChange={handleFormChange}
-                    className={`mt-1 w-full px-3 py-2 border ${formErrors.nokTelephone1 ? 'border-red-500' : 'border-gray-300'} rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500`}
-                    placeholder="e.g., +1234567892"
-                  />
-                  {formErrors.nokTelephone1 && (
-                    <p className="mt-1 text-xs text-red-600">{formErrors.nokTelephone1}</p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Next of Kin Telephone 2</label>
-                  <input
-                    type="tel"
-                    name="nokTelephone2"
-                    value={formData.nokTelephone2}
-                    onChange={handleFormChange}
-                    className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder="e.g., +1234567893"
-                  />
-                </div>
-                <div className="flex space-x-3 pt-4">
-                  <button
-                    type="submit"
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-semibold rounded-md shadow-sm text-white bg-indigo-900 hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  >
-                    Save
-                  </button>
-                  <button
+
+                {/* Buttons */}
+                <div className="flex flex-col sm:flex-row justify-end gap-3 pt-6 border-t">
+                  <Button
                     type="button"
-                    onClick={closeModal}
-                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-semibold rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    onClick={() => {
+                      setShowEditModal(false);
+                      setEditingPerson(null);
+                      setFormErrors({});
+                      setNotification({ show: false, type: '', message: '' });
+                    }}
+                    className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium px-6 py-2 rounded-lg transition-colors text-xs"
                   >
                     Cancel
-                  </button>
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium px-6 py-2 rounded-lg transition-all shadow-md hover:shadow-lg text-xs"
+                    disabled={Object.keys(formErrors).length > 0}
+                  >
+                    Save Changes
+                  </Button>
                 </div>
               </form>
+
+              <style
+                dangerouslySetInnerHTML={{
+                  __html: `
+                  .react-datepicker {
+                    font-family: "Inter", sans-serif;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 0.5rem;
+                    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+                      0 2px 4px -1px rgba(0, 0, 0, 0.06);
+                  }
+                  .react-datepicker__header {
+                    background-color: #f9fafb;
+                    border-bottom: 1px solid #e5e7eb;
+                    border-top-left-radius: 0.5rem;
+                    border-top-right-radius: 0.5rem;
+                    padding-top: 0.5rem;
+                  }
+                  .react-datepicker__current-month {
+                    font-weight: 600;
+                    color: #111827;
+                  }
+                  .react-datepicker__day-name {
+                    color: #6b7280;
+                    font-weight: 500;
+                  }
+                  .react-datepicker__day {
+                    color: #111827;
+                    margin: 0.2rem;
+                  }
+                  .react-datepicker__day--selected {
+                    background-color: #3b82f6;
+                    color: white;
+                    border-radius: 0.375rem;
+                  }
+                  .react-datepicker__day--selected:hover {
+                    background-color: #2563eb;
+                  }
+                  .react-datepicker__day:hover {
+                    border-radius: 0.375rem;
+                    background-color: #f3f4f6;
+                  }
+                  .react-datepicker__navigation {
+                    top: 0.5rem;
+                  }
+                  .react-datepicker__navigation--previous {
+                    left: 1rem;
+                  }
+                  .react-datepicker__navigation--next {
+                    right: 1rem;
+                  }
+                `,
+                }}
+              />
             </div>
           </div>
         )}
@@ -484,7 +735,7 @@ const Birthdays = () => {
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                 ></path>
               </svg>
-              Loading data...
+              Processing...
             </div>
           </div>
         )}
