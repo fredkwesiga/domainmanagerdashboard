@@ -54,7 +54,7 @@ const BirthdayForm = () => {
 
   const handleDateChange = (date) => {
     setFormData((prev) => ({ ...prev, birthdayFull: date }));
-    if (formErrors.birthdayFull) {
+    if (formErrors.birthday坂Full) {
       setFormErrors((prev) => ({ ...prev, birthdayFull: "" }));
     }
   };
@@ -73,20 +73,32 @@ const BirthdayForm = () => {
     }
 
     const submissionData = {
-      ...formData,
+      fullName: formData.fullName,
       birthdayFull: formData.birthdayFull ? formData.birthdayFull.toISOString().split("T")[0] : "",
-      birthday: formData.birthdayFull
-        ? `${String(formData.birthdayFull.getDate()).padStart(2, "0")}/${String(
-            formData.birthdayFull.getMonth() + 1
-          ).padStart(2, "0")}`
-        : "",
+      telephone1: formData.telephone1,
+      telephone2: formData.telephone2,
+      email: formData.email,
+      nextOfKin: formData.nextOfKin,
+      nokTelephone1: formData.nokTelephone1,
+      nokTelephone2: formData.nokTelephone2,
     };
 
     try {
-      // Simulate API call (replace with actual API endpoint)
-      console.log("Submitting birthday data:", submissionData);
-      showNotification("success", "Birthday added successfully!");
-      navigate("/birthdays"); // Redirect back to Birthdays page
+      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/addbirthdays.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(submissionData),
+      });
+      const result = await response.json();
+      
+      if (result.status === 'success') {
+        showNotification("success", result.message);
+        navigate("/birthdays");
+      } else {
+        showNotification("error", result.message);
+      }
     } catch (error) {
       showNotification("error", "Failed to save birthday");
       console.error("Error:", error);
@@ -147,7 +159,6 @@ const BirthdayForm = () => {
         Add New Birthday
       </h2>
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Personal Info */}
         <div className="space-y-4">
           <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
             Personal Information
@@ -185,7 +196,6 @@ const BirthdayForm = () => {
           </div>
         </div>
 
-        {/* Contact Info */}
         <div className="space-y-4">
           <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
             Contact Details
@@ -235,7 +245,6 @@ const BirthdayForm = () => {
           </div>
         </div>
 
-        {/* Next of Kin Info */}
         <div className="space-y-4">
           <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
             Next of Kin
@@ -284,7 +293,6 @@ const BirthdayForm = () => {
           </div>
         </div>
 
-        {/* Buttons */}
         <div className="flex flex-col sm:flex-row justify-end gap-3 pt-6 border-t">
           <Button
             type="button"

@@ -3,49 +3,9 @@ import { FiSearch, FiMoreVertical, FiX, FiEye, FiEdit, FiTrash } from 'react-ico
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 
-// Mock data for Birthdays
-const mockData = [
-  {
-    id: 'B001',
-    fullName: 'Shamuza Tekjuice',
-    birthday: '15/06',
-    birthdayFull: '1990-06-15',
-    telephone1: '+256234567890',
-    telephone2: '+1234567891',
-    email: 'shamuza@tekjuice.co.uk',
-    nextOfKin: 'Jane Doe',
-    nokTelephone1: '+1234567892',
-    nokTelephone2: '+1234567893',
-  },
-  {
-    id: 'B002',
-    fullName: 'Jane Smith',
-    birthday: '20/05',
-    birthdayFull: '1985-05-20',
-    telephone1: '+1234567894',
-    telephone2: '',
-    email: 'jane.smith@tekjuice.co.uk',
-    nextOfKin: 'Bob Smith',
-    nokTelephone1: '+1234567895',
-    nokTelephone2: '',
-  },
-  {
-    id: 'B003',
-    fullName: 'Alice Johnson',
-    birthday: '10/05',
-    birthdayFull: '1992-05-10',
-    telephone1: '+1234567896',
-    telephone2: '+1234567897',
-    email: 'alice.johnson@tekjuice.co.uk',
-    nextOfKin: 'Tom Johnson',
-    nokTelephone1: '+1234567898',
-    nokTelephone2: '+1234567899',
-  },
-];
-
 const Birthdays = () => {
   const navigate = useNavigate();
-  const [data, setData] = useState(mockData);
+  const [data, setData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -57,13 +17,42 @@ const Birthdays = () => {
   const [dropdownOpen, setDropdownOpen] = useState(null);
   const [formErrors, setFormErrors] = useState({});
 
-  // Simulate email notification for birthdays within 7 days
-  const checkBirthdays = () => {
+  const fetchBirthdays = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/getbirthdays.php');
+      const result = await response.json();
+      if (result.status === 'success') {
+        const formattedData = result.data.map(item => ({
+          ...item,
+          birthday: item.birthday_short || new Date(item.birthday).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }),
+          birthdayFull: item.birthday
+        }));
+        setData(formattedData);
+        setFilteredData(formattedData);
+        checkBirthdays(formattedData);
+      } else {
+        setError(result.message);
+        toast.error(result.message, { position: 'top-right', autoClose: 2000 });
+      }
+    } catch (err) {
+      setError('Failed to fetch birthdays');
+      toast.error('Failed to fetch birthdays', { position: 'top-right', autoClose: 2000 });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBirthdays();
+  }, []);
+
+  const checkBirthdays = (birthdays) => {
     const today = new Date();
     const sevenDaysFromNow = new Date(today);
     sevenDaysFromNow.setDate(today.getDate() + 7);
 
-    data.forEach((person) => {
+    birthdays.forEach((person) => {
       const [day, month] = person.birthday.split('/');
       const birthdayThisYear = new Date(today.getFullYear(), parseInt(month) - 1, parseInt(day));
       
@@ -71,41 +60,32 @@ const Birthdays = () => {
         birthdayThisYear.setFullYear(today.getFullYear() + 1);
       }
 
-      if (
-        birthdayThisYear >= today &&
-        birthdayThisYear <= sevenDaysFromNow
-      ) {
-        console.log(`Sending email notification for ${person.fullName}'s birthday on ${person.birthday}`);
+      if (birthdayThisYear >= today && birthdayThisYear <= sevenDaysFromNow) {
+        console.log(`Sending email notification for ${person.full_name}'s birthday on ${person.birthday}`);
         simulateEmailNotification(person);
       }
     });
   };
 
   const simulateEmailNotification = (person) => {
-    console.log(`Email sent to admins: Birthday alert for ${person.fullName} on ${person.birthday}`);
+    console.log(`Email sent to admins: Birthday alert for ${person.full_name} on ${person.birthday}`);
   };
 
-  // Filter data based on search query
   const filterData = () => {
     let filtered = data;
     if (searchQuery) {
       filtered = data.filter((person) =>
-        person.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        person.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         person.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        person.nextOfKin.toLowerCase().includes(searchQuery.toLowerCase())
+        person.next_of_kin.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
     setFilteredData(filtered);
   };
 
   useEffect(() => {
-    setFilteredData(data);
-    checkBirthdays();
-  }, [data]);
-
-  useEffect(() => {
     filterData();
-  }, [searchQuery]);
+  }, [searchQuery, data]);
 
   const handleSearch = (e) => {
     setSearchQuery(e.target.value);
@@ -131,7 +111,7 @@ const Birthdays = () => {
 
   const validateEditForm = () => {
     const errors = {};
-    if (!editingPerson.fullName.trim()) errors.fullName = 'Full Name is required';
+    if (!editingPerson.full_name.trim()) errors.full_name = 'Full Name is required';
     if (!editingPerson.birthdayFull) errors.birthdayFull = 'Birthday is required';
     if (!editingPerson.telephone1.trim()) errors.telephone1 = 'Telephone 1 is required';
     if (!editingPerson.email.trim()) {
@@ -139,12 +119,12 @@ const Birthdays = () => {
     } else if (!/\S+@\S+\.\S+/.test(editingPerson.email)) {
       errors.email = 'Invalid email format';
     }
-    if (!editingPerson.nextOfKin.trim()) errors.nextOfKin = 'Next of Kin is required';
-    if (!editingPerson.nokTelephone1.trim()) errors.nokTelephone1 = 'Next of Kin Telephone 1 is required';
+    if (!editingPerson.next_of_kin.trim()) errors.next_of_kin = 'Next of Kin is required';
+    if (!editingPerson.nok_telephone1.trim()) errors.nok_telephone1 = 'Next of Kin Telephone 1 is required';
     return errors;
   };
 
-  const handleEditSubmit = (e) => {
+  const handleEditSubmit = async (e) => {
     e.preventDefault();
     const errors = validateEditForm();
     if (Object.keys(errors).length > 0) {
@@ -156,45 +136,88 @@ const Birthdays = () => {
       return;
     }
 
-    const updatedPerson = {
-      ...editingPerson,
-      birthday: editingPerson.birthdayFull
-        ? `${String(new Date(editingPerson.birthdayFull).getDate()).padStart(2, '0')}/${String(
-            new Date(editingPerson.birthdayFull).getMonth() + 1
-          ).padStart(2, '0')}`
-        : editingPerson.birthday,
+    const submissionData = {
+      id: editingPerson.id,
+      full_name: editingPerson.full_name,
+      birthdayFull: editingPerson.birthdayFull.split('T')[0],
+      telephone1: editingPerson.telephone1,
+      telephone2: editingPerson.telephone2 || '',
+      email: editingPerson.email,
+      next_of_kin: editingPerson.next_of_kin,
+      nok_telephone1: editingPerson.nok_telephone1,
+      nok_telephone2: editingPerson.nok_telephone2 || '',
     };
 
-    setData((prev) =>
-      prev.map((item) => (item.id === updatedPerson.id ? updatedPerson : item))
-    );
-    toast.success('Birthday updated successfully!', {
-      position: 'top-right',
-      autoClose: 2000,
-    });
-    setShowEditModal(false);
-    setEditingPerson(null);
-    setFormErrors({});
+    try {
+      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/updatebirthdays.php', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(submissionData),
+      });
+      const result = await response.json();
+
+      if (result.status === 'success') {
+        toast.success('Birthday updated successfully!', {
+          position: 'top-right',
+          autoClose: 2000,
+        });
+        setShowEditModal(false);
+        setEditingPerson(null);
+        setFormErrors({});
+        fetchBirthdays();
+      } else {
+        toast.error(result.message || 'Failed to update birthday', {
+          position: 'top-right',
+          autoClose: 2000,
+        });
+      }
+    } catch (err) {
+      toast.error('Network error occurred while updating birthday', {
+        position: 'top-right',
+        autoClose: 2000,
+      });
+      console.error('Error updating birthday:', err);
+    }
   };
 
   const handleDelete = async (id) => {
-    try {
-      setLoading(true);
-      const updatedData = data.filter((item) => item.id !== id);
-      setData(updatedData);
-      setDropdownOpen(null);
-      toast.success('Birthday deleted successfully!', {
-        position: 'top-right',
-        autoClose: 2000,
-      });
-    } catch (err) {
-      setError(err.message || 'Failed to delete person');
-      toast.error('Failed to delete birthday', {
-        position: 'top-right',
-        autoClose: 2000,
-      });
-    } finally {
-      setLoading(false);
+    if (window.confirm('Are you sure you want to delete this birthday?')) {
+      try {
+        setLoading(true);
+        const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/deletebirthdays.php', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ id }),
+        });
+        const result = await response.json();
+
+        if (result.status === 'success') {
+          toast.success('Birthday deleted successfully!', {
+            position: 'top-right',
+            autoClose: 2000,
+          });
+          fetchBirthdays(); // Refresh the list
+          setDropdownOpen(null);
+        } else {
+          toast.error(result.message || 'Failed to delete birthday', {
+            position: 'top-right',
+            autoClose: 2000,
+          });
+        }
+      } catch (err) {
+        setError(err.message || 'Failed to delete birthday');
+        toast.error('Network error occurred while deleting birthday', {
+          position: 'top-right',
+          autoClose: 2000,
+        });
+        console.error('Error deleting birthday:', err);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -207,12 +230,10 @@ const Birthdays = () => {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Birthdays</h1>
         </div>
 
-        {/* Search and Add Button */}
         <div className="bg-white shadow rounded-lg overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div className="relative w-full max-w-xs">
@@ -236,7 +257,6 @@ const Birthdays = () => {
             </button>
           </div>
 
-          {/* Table */}
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -271,11 +291,11 @@ const Birthdays = () => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-medium">
-                          {person.fullName.charAt(0)}
+                          {person.full_name.charAt(0)}
                         </div>
                         <div className="ml-4">
                           <div className="text-sm font-medium text-gray-900">
-                            {person.fullName}
+                            {person.full_name}
                           </div>
                         </div>
                       </div>
@@ -332,11 +352,9 @@ const Birthdays = () => {
           </div>
         </div>
 
-        {/* View Modal */}
         {showViewModal && selectedPerson && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-lg w-full max-w-md">
-              {/* Header */}
               <div className="bg-indigo-800 text-white p-3 rounded-t-lg flex justify-between items-center">
                 <h2 className="text-xl font-bold">Birthday Details</h2>
                 <button
@@ -346,16 +364,12 @@ const Birthdays = () => {
                   <FiX size={20} />
                 </button>
               </div>
-              
-              {/* Status badge and name */}
               <div className="bg-indigo-800 text-white px-3 pb-3 flex items-center">
                 <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium mr-2">
                   Active
                 </span>
-                <span className="text-lg">{selectedPerson.fullName}</span>
+                <span className="text-lg">{selectedPerson.full_name}</span>
               </div>
-              
-              {/* Personal Information Section */}
               <div className="p-4">
                 <div className="flex items-start mb-4">
                   <div className="bg-indigo-100 p-2 rounded-lg mr-3">
@@ -367,7 +381,7 @@ const Birthdays = () => {
                     <h3 className="text-lg font-semibold text-gray-800 mb-2">Personal Information</h3>
                     <div className="grid grid-cols-2 gap-y-2 text-sm">
                       <div className="text-gray-500">Full Name</div>
-                      <div className="text-right font-medium">{selectedPerson.fullName}</div>
+                      <div className="text-right font-medium">{selectedPerson.full_name}</div>
                       <div className="text-gray-500">Birthday</div>
                       <div className="text-right font-medium">{selectedPerson.birthday}</div>
                       <div className="text-gray-500">Telephone 1</div>
@@ -379,8 +393,6 @@ const Birthdays = () => {
                     </div>
                   </div>
                 </div>
-                
-                {/* Next of Kin Section */}
                 <div className="flex items-start">
                   <div className="bg-purple-100 p-2 rounded-lg mr-3">
                     <svg className="w-5 h-5 text-purple-700" fill="currentColor" viewBox="0 0 20 20">
@@ -391,17 +403,15 @@ const Birthdays = () => {
                     <h3 className="text-lg font-semibold text-gray-800 mb-2">Next of Kin</h3>
                     <div className="grid grid-cols-2 gap-y-2 text-sm">
                       <div className="text-gray-500">Name</div>
-                      <div className="text-right font-medium">{selectedPerson.nextOfKin}</div>
+                      <div className="text-right font-medium">{selectedPerson.next_of_kin}</div>
                       <div className="text-gray-500">Telephone 1</div>
-                      <div className="text-right font-medium">{selectedPerson.nokTelephone1}</div>
+                      <div className="text-right font-medium">{selectedPerson.nok_telephone1}</div>
                       <div className="text-gray-500">Telephone 2</div>
-                      <div className="text-right font-medium">{selectedPerson.nokTelephone2 || 'N/A'}</div>
+                      <div className="text-right font-medium">{selectedPerson.nok_telephone2 || 'N/A'}</div>
                     </div>
                   </div>
                 </div>
               </div>
-              
-              {/* Footer button */}
               <div className="p-3 rounded-b-lg">
                 <button
                   onClick={() => setShowViewModal(false)}
@@ -414,29 +424,26 @@ const Birthdays = () => {
           </div>
         )}
 
-        {/* Edit Modal */}
         {showEditModal && editingPerson && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl p-4">
               <h2 className="text-xl font-bold mb-4">Edit Birthday</h2>
-              
               <form onSubmit={handleEditSubmit} className="space-y-3">
                 <div>
                   <label className="block text-gray-700 text-sm mb-1">Full Name</label>
                   <input
                     type="text"
-                    name="fullName"
-                    value={editingPerson.fullName}
+                    name="full_name"
+                    value={editingPerson.full_name}
                     onChange={handleEditChange}
                     required
                     placeholder="e.g., John Doe"
                     className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                   />
-                  {formErrors.fullName && (
-                    <p className="mt-1 text-xs text-red-500">{formErrors.fullName}</p>
+                  {formErrors.full_name && (
+                    <p className="mt-1 text-xs text-red-500">{formErrors.full_name}</p>
                   )}
                 </div>
-                
                 <div>
                   <label className="block text-gray-700 text-sm mb-1">Birthday</label>
                   <input
@@ -451,7 +458,6 @@ const Birthdays = () => {
                     <p className="mt-1 text-xs text-red-500">{formErrors.birthdayFull}</p>
                   )}
                 </div>
-                
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-gray-700 text-sm mb-1">Primary Telephone</label>
@@ -480,7 +486,6 @@ const Birthdays = () => {
                     />
                   </div>
                 </div>
-                
                 <div>
                   <label className="block text-gray-700 text-sm mb-1">Email</label>
                   <input
@@ -496,52 +501,49 @@ const Birthdays = () => {
                     <p className="mt-1 text-xs text-red-500">{formErrors.email}</p>
                   )}
                 </div>
-                
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-gray-700 text-sm mb-1">Next of Kin Name</label>
                     <input
                       type="text"
-                      name="nextOfKin"
-                      value={editingPerson.nextOfKin}
+                      name="next_of_kin"
+                      value={editingPerson.next_of_kin}
                       onChange={handleEditChange}
                       required
                       placeholder="e.g., Jane Doe"
                       className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                     />
-                    {formErrors.nextOfKin && (
-                      <p className="mt-1 text-xs text-red-500">{formErrors.nextOfKin}</p>
+                    {formErrors.next_of_kin && (
+                      <p className="mt-1 text-xs text-red-500">{formErrors.next_of_kin}</p>
                     )}
                   </div>
                   <div>
                     <label className="block text-gray-700 text-sm mb-1">Next of Kin Telephone 1</label>
                     <input
                       type="tel"
-                      name="nokTelephone1"
-                      value={editingPerson.nokTelephone1}
+                      name="nok_telephone1"
+                      value={editingPerson.nok_telephone1}
                       onChange={handleEditChange}
                       required
                       placeholder="e.g., +1234567892"
                       className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                     />
-                    {formErrors.nokTelephone1 && (
-                      <p className="mt-1 text-xs text-red-500">{formErrors.nokTelephone1}</p>
+                    {formErrors.nok_telephone1 && (
+                      <p className="mt-1 text-xs text-red-500">{formErrors.nok_telephone1}</p>
                     )}
                   </div>
                 </div>
-                
                 <div>
                   <label className="block text-gray-700 text-sm mb-1">Next of Kin Telephone 2 (Optional)</label>
                   <input
                     type="tel"
-                    name="nokTelephone2"
-                    value={editingPerson.nokTelephone2}
+                    name="nok_telephone2"
+                    value={editingPerson.nok_telephone2}
                     onChange={handleEditChange}
                     placeholder="e.g., +1234567893"
                     className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                   />
                 </div>
-
                 <div className="mt-4 grid grid-cols-2 gap-4">
                   <button
                     type="button"
@@ -567,7 +569,6 @@ const Birthdays = () => {
           </div>
         )}
 
-        {/* Loading and Error States */}
         {loading && (
           <div className="mt-8 text-center">
             <div className="inline-flex items-center px-4 py-2 font-semibold leading-6 text-sm shadow rounded-md text-white bg-indigo-900 transition ease-in-out duration-150 cursor-not-allowed">
