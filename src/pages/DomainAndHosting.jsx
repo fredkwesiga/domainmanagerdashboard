@@ -1,46 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Tab } from '@headlessui/react';
-import { FiSearch, FiX, FiEye, FiEdit, FiTrash, FiMoreVertical } from 'react-icons/fi';
-import { toast } from 'react-toastify';
+import { FiSearch, FiX, FiEye, FiMoreVertical } from 'react-icons/fi';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
-
-// Mock data for Domains and Hosting
-const mockData = [
-  {
-    id: 'D001',
-    type: 'Domain',
-    name: 'example.com',
-    ownerEmail: 'user1@example.com',
-    owner: 'John Doe',
-    hostingType: null,
-    dates: { expiryDate: '2025-06-15' },
-    status: 'Active',
-  },
-  {
-    id: 'H001',
-    type: 'Hosting',
-    name: 'testsite.com',
-    ownerEmail: 'user2@example.com',
-    owner: 'Jane Smith',
-    hostingType: 'VPS',
-    dates: { expiryDate: '2025-05-12' },
-    status: 'Expiring Soon',
-  },
-  {
-    id: 'DH001',
-    type: 'Domain & Hosting',
-    name: 'demo.net',
-    ownerEmail: 'user3@example.com',
-    owner: 'Bob Johnson',
-    hostingType: 'Dedicated',
-    dates: { expiryDate: '2025-04-10' },
-    status: 'Expired',
-  },
-];
 
 const DomainAndHosting = () => {
   const navigate = useNavigate();
-  const [data, setData] = useState(mockData);
+  const [data, setData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
   const [stats, setStats] = useState({
     total: 0,
@@ -55,9 +22,80 @@ const DomainAndHosting = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editingItem, setEditingItem] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+
+  // Fetch domains from API
+  const fetchDomains = async () => {
+    try {
+      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/getdomains.php');
+      const data = await response.json();
+      if (data.status === 'success') {
+        return data.data.map(item => ({
+          id: item.id,
+          type: 'Domain',
+          name: item.domainName,
+          ownerEmail: item.contact?.email1 || '',
+          owner: `${item.owner?.firstName || ''} ${item.owner?.lastName || ''}`.trim(),
+          hostingType: null,
+          dates: { expiryDate: item.dates?.expiryDate || '' },
+        }));
+      } else {
+        throw new Error(data.message || 'Failed to fetch domains');
+      }
+    } catch (err) {
+      throw new Error('Network error occurred while fetching domains');
+    }
+  };
+
+  // Fetch hosting from API
+  const fetchHosting = async () => {
+    try {
+      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/gethosting.php');
+      const data = await response.json();
+      if (data.status === 'success') {
+        return data.data.map(item => ({
+          id: item.id,
+          type: 'Hosting',
+          name: item.hosted_domain,
+          ownerEmail: item.primary_email || '',
+          owner: `${item.owner_first_name || ''} ${item.owner_last_name || ''}`.trim(),
+          hostingType: item.hosting_type || 'N/A',
+          dates: { expiryDate: item.expiry_date || '' },
+        }));
+      } else {
+        throw new Error(data.message || 'Failed to fetch hosting');
+      }
+    } catch (err) {
+      throw new Error('Network error occurred while fetching hosting');
+    }
+  };
+
+  // Fetch both domains and hosting data
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [domains, hosting] = await Promise.all([fetchDomains(), fetchHosting()]);
+      const combinedData = [...domains, ...hosting].sort((a, b) => 
+        a.name.localeCompare(b.name)
+      );
+      setData(combinedData);
+      calculateStats(combinedData);
+      setFilteredData(combinedData);
+    } catch (err) {
+      setError(err.message || 'Failed to fetch data');
+      toast.error(err.message || 'Failed to fetch data');
+      console.error('Error fetching data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   // Calculate statistics
   const calculateStats = (data) => {
@@ -182,6 +220,7 @@ const DomainAndHosting = () => {
     }
 
     setFilteredData(filtered);
+    setCurrentPage(1); // Reset to first page when filtering
   };
 
   // Handle search input
@@ -198,15 +237,6 @@ const DomainAndHosting = () => {
       .padStart(2, '0')}/${date.getFullYear()}`;
   };
 
-  // Format date to YYYY-MM-DD for input fields
-  const formatDateForInput = (dateString) => {
-    const date = new Date(dateString);
-    return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date
-      .getDate()
-      .toString()
-      .padStart(2, '0')}`;
-  };
-
   // Handle View action
   const handleView = (item) => {
     setSelectedItem(item);
@@ -214,115 +244,80 @@ const DomainAndHosting = () => {
     setDropdownOpen(null);
   };
 
-  // Handle Edit action
-  const handleEdit = (item) => {
-    setEditingItem({
-      ...item,
-      ownerFirstName: item.owner.split(' ')[0],
-      ownerLastName: item.owner.split(' ')[1] || '',
-    });
-    setShowEditModal(true);
-    setDropdownOpen(null);
-  };
+  // Pagination logic
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredData.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
 
-  // Handle Edit form changes
-  const handleEditChange = (e) => {
-    const { name, value } = e.target;
-    setEditingItem((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
+  // Change page
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
-  // Handle Edit form submission
-  const handleEditSubmit = async () => {
-    setLoading(true);
-    try {
-      const updatedItem = {
-        ...editingItem,
-        owner: `${editingItem.ownerFirstName} ${editingItem.ownerLastName}`.trim(),
-        dates: { expiryDate: editingItem.dates.expiryDate },
-      };
-      const updatedData = data.map((item) =>
-        item.id === updatedItem.id ? updatedItem : item
-      );
-      setData(updatedData);
-      calculateStats(updatedData);
-      filterData(0);
-      toast.success('Item updated successfully!', {
-        position: 'top-right',
-        autoClose: 2000,
-      });
-      setShowEditModal(false);
-      setEditingItem(null);
-    } catch (err) {
-      setError(err.message || 'Failed to edit item');
-      toast.error('Failed to edit item', {
-        position: 'top-right',
-        autoClose: 2000,
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Generate page numbers with ellipsis
+  const getPageNumbers = () => {
+    const pageNumbers = [];
+    const maxVisiblePages = 3;
 
-  // Handle Delete action
-  const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this item?')) {
-      setLoading(true);
-      try {
-        const updatedData = data.filter((item) => item.id !== id);
-        setData(updatedData);
-        calculateStats(updatedData);
-        filterData(0);
-        toast.success('Item deleted successfully!', {
-          position: 'top-right',
-          autoClose: 2000,
-        });
-        setDropdownOpen(null);
-      } catch (err) {
-        setError(err.message || 'Failed to delete item');
-        toast.error('Failed to delete item', {
-          position: 'top-right',
-          autoClose: 2000,
-        });
-      } finally {
-        setLoading(false);
+    if (totalPages <= maxVisiblePages + 2) {
+      for (let i = 1; i <= totalPages; i++) {
+        pageNumbers.push(i);
       }
+    } else {
+      pageNumbers.push(1);
+      let startPage = Math.max(2, currentPage - 1);
+      let endPage = Math.min(totalPages - 1, currentPage + 1);
+
+      if (currentPage <= maxVisiblePages - 1) {
+        endPage = maxVisiblePages;
+      } else if (currentPage >= totalPages - (maxVisiblePages - 2)) {
+        startPage = totalPages - (maxVisiblePages - 1);
+      }
+
+      if (startPage > 2) {
+        pageNumbers.push('...');
+      }
+
+      for (let i = startPage; i <= endPage; i++) {
+        pageNumbers.push(i);
+      }
+
+      if (endPage < totalPages - 1) {
+        pageNumbers.push('...');
+      }
+
+      pageNumbers.push(totalPages);
     }
-  };
 
-  // Handle Add New buttons
-  const handleAddNewDomain = () => {
-    navigate('/domains/add');
-  };
-
-  const handleAddNewHosting = () => {
-    navigate('/hosting/add');
+    return pageNumbers;
   };
 
   // Handle dropdown toggle
   const handleDropdownToggle = (id, e) => {
     e.stopPropagation();
-    console.log('Dropdown clicked for:', id); // Debug click
     setDropdownOpen(dropdownOpen === id ? null : id);
   };
 
-  useEffect(() => {
-    setFilteredData(data);
-    calculateStats(data);
-    filterData(0); // Default to "All" tab
-  }, [data]);
-
   return (
     <div className="min-h-screen bg-gray-50 p-6">
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+      />
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Domain & Hosting</h1>
         </div>
 
-        {/* Search and Add Buttons */}
+        {/* Search */}
         <div className="bg-white shadow rounded-lg overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div className="relative w-full max-w-xs">
@@ -338,20 +333,6 @@ const DomainAndHosting = () => {
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
-            {/* <div className="flex gap-2">
-              <button
-                onClick={handleAddNewDomain}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-semibold rounded-md shadow-sm text-white bg-indigo-900 hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                + Add New Domain
-              </button>
-              <button
-                onClick={handleAddNewHosting}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-semibold rounded-md shadow-sm text-white bg-indigo-900 hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                + Add New Hosting
-              </button>
-            </div> */}
           </div>
 
           {/* Tabs */}
@@ -451,7 +432,7 @@ const DomainAndHosting = () => {
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {filteredData.map((item) => {
+                        {currentItems.map((item) => {
                           const status = getStatus(item.dates.expiryDate);
                           return (
                             <tr key={item.id}>
@@ -509,22 +490,6 @@ const DomainAndHosting = () => {
                                           <FiEye className="mr-2" size={16} />
                                           View Details
                                         </button>
-                                        <button
-                                          onClick={() => handleEdit(item)}
-                                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
-                                          role="menuitem"
-                                        >
-                                          <FiEdit className="mr-2" size={16} />
-                                          Edit
-                                        </button>
-                                        <button
-                                          onClick={() => handleDelete(item.id)}
-                                          className="flex items-center px-4 py-2 text-sm text-red-700 hover:bg-gray-100 w-full text-left"
-                                          role="menuitem"
-                                        >
-                                          <FiTrash className="mr-2" size={16} />
-                                          Delete
-                                        </button>
                                       </div>
                                     </div>
                                   )}
@@ -542,11 +507,45 @@ const DomainAndHosting = () => {
           </Tab.Group>
         </div>
 
+         {/* Pagination */}
+                  <div className="flex flex-col md:flex-row items-center justify-between mt-6 px-6">
+                    <div className="text-xs text-gray-500 mb-4 md:mb-0">
+                      Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredData.length)} of {filteredData.length} records
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => paginate(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className={`px-3 py-1 rounded-md text-xs ${currentPage === 1 ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-indigo-900 text-white hover:bg-indigo-600'}`}
+                      >
+                        Prev
+                      </button>
+                      <div className="flex space-x-1">
+                        {getPageNumbers().map((number, index) => (
+                          <button
+                            key={index}
+                            onClick={() => typeof number === 'number' ? paginate(number) : null}
+                            className={`px-3 py-1 rounded-md text-xs ${currentPage === number ? 'bg-indigo-900 text-white' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'} ${typeof number !== 'number' ? 'cursor-default' : ''}`}
+                            disabled={number === '...'}
+                          >
+                            {number}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => paginate(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className={`px-3 py-1 rounded-md text-xs ${currentPage === totalPages ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-indigo-900 text-white hover:bg-indigo-600'}`}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+
         {/* View Modal */}
         {showModal && selectedItem && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-lg w-full max-w-md">
-              {/* Header */}
               <div className="bg-indigo-800 text-white p-3 rounded-t-lg flex justify-between items-center">
                 <h2 className="text-xl font-bold">Item Details</h2>
                 <button
@@ -556,8 +555,6 @@ const DomainAndHosting = () => {
                   <FiX size={20} />
                 </button>
               </div>
-
-              {/* Item status badge and name */}
               <div className="bg-indigo-800 text-white px-3 pb-3 flex items-center">
                 <span
                   className={`px-3 py-1 rounded-full text-sm font-medium ${getStatus(
@@ -568,8 +565,6 @@ const DomainAndHosting = () => {
                 </span>
                 <span className="text-lg ml-2">{selectedItem.name}</span>
               </div>
-
-              {/* Item Information Section */}
               <div className="p-4">
                 <div className="flex items-start mb-4">
                   <div className="bg-indigo-100 p-2 rounded-lg mr-3">
@@ -601,8 +596,6 @@ const DomainAndHosting = () => {
                     </div>
                   </div>
                 </div>
-
-                {/* Owner Information Section */}
                 <div className="flex items-start">
                   <div className="bg-purple-100 p-2 rounded-lg mr-3">
                     <svg
@@ -632,8 +625,6 @@ const DomainAndHosting = () => {
                   </div>
                 </div>
               </div>
-
-              {/* Footer button */}
               <div className="p-3 rounded-b-lg">
                 <button
                   onClick={() => setShowModal(false)}
@@ -641,117 +632,6 @@ const DomainAndHosting = () => {
                 >
                   Close Details
                 </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Edit Modal */}
-        {showEditModal && editingItem && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl">
-              <div className="p-4">
-                <h2 className="text-xl font-bold mb-4">Edit Item</h2>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-gray-700 text-sm mb-1">Name</label>
-                    <input
-                      type="text"
-                      name="name"
-                      value={editingItem.name}
-                      onChange={handleEditChange}
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 text-sm mb-1">Type</label>
-                    <select
-                      name="type"
-                      value={editingItem.type}
-                      onChange={handleEditChange}
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                    >
-                      <option value="Domain">Domain</option>
-                      <option value="Hosting">Hosting</option>
-                      <option value="Domain & Hosting">Domain & Hosting</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 text-sm mb-1">Hosting Type</label>
-                    <select
-                      name="hostingType"
-                      value={editingItem.hostingType || ''}
-                      onChange={handleEditChange}
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                    >
-                      <option value="">N/A</option>
-                      <option value="VPS">VPS</option>
-                      <option value="Dedicated">Dedicated</option>
-                      <option value="Shared">Shared</option>
-                    </select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-gray-700 text-sm mb-1">Owner First Name</label>
-                      <input
-                        type="text"
-                        name="ownerFirstName"
-                        value={editingItem.ownerFirstName}
-                        onChange={handleEditChange}
-                        className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-gray-700 text-sm mb-1">Owner Last Name</label>
-                      <input
-                        type="text"
-                        name="ownerLastName"
-                        value={editingItem.ownerLastName}
-                        onChange={handleEditChange}
-                        className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 text-sm mb-1">Owner Email</label>
-                    <input
-                      type="email"
-                      name="ownerEmail"
-                      value={editingItem.ownerEmail}
-                      onChange={handleEditChange}
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 text-sm mb-1">Expiry Date</label>
-                    <input
-                      type="date"
-                      name="expiryDate"
-                      value={formatDateForInput(editingItem.dates.expiryDate)}
-                      onChange={(e) =>
-                        setEditingItem((prev) => ({
-                          ...prev,
-                          dates: { expiryDate: e.target.value },
-                        }))
-                      }
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-4">
-                  <button
-                    onClick={() => setShowEditModal(false)}
-                    className="w-full py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-md focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-gray-500"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleEditSubmit}
-                    className="w-full py-2 bg-indigo-800 hover:bg-indigo-900 text-white text-sm font-medium rounded-md focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-indigo-500"
-                  >
-                    Save
-                  </button>
-                </div>
               </div>
             </div>
           </div>
@@ -778,7 +658,8 @@ const DomainAndHosting = () => {
                 <path
                   className="opacity-75"
                   fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0           
+                    5.373 0 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                 ></path>
               </svg>
               Processing...

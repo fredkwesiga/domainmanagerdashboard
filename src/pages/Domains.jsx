@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import DomainTabs from '../components/dashboard/DomainTabs';
 
 const Domains = () => {
@@ -26,9 +28,11 @@ const Domains = () => {
         setDomains(sortedDomains);
       } else {
         setConnectionError(data.message || 'Failed to fetch domains');
+        toast.error(data.message || 'Failed to fetch domains');
       }
     } catch (err) {
       setConnectionError('Network error occurred while fetching domains');
+      toast.error('Network error occurred while fetching domains');
       console.error('Error fetching domains:', err);
     } finally {
       setLoading(false);
@@ -51,12 +55,74 @@ const Domains = () => {
       const data = await response.json();
       if (data.status === 'success') {
         fetchDomains(); // Refresh the list after successful deletion
+        toast.success('Domain deleted successfully!');
       } else {
         setConnectionError(data.message || 'Failed to delete domain');
+        toast.error(data.message || 'Failed to delete domain');
       }
     } catch (err) {
       setConnectionError('Network error occurred while deleting domain');
+      toast.error('Network error occurred while deleting domain');
       console.error('Error deleting domain:', err);
+    }
+  };
+
+  // Function to handle domain addition
+  const handleAddDomain = async (domainData) => {
+    try {
+      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/adddomain.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(domainData)
+      });
+      const data = await response.json();
+      if (data.status === 'success') {
+        fetchDomains();
+        toast.success('Domain added successfully!');
+      } else {
+        setConnectionError(data.message || 'Failed to add domain');
+        toast.error(data.message || 'Failed to add domain');
+      }
+    } catch (err) {
+      setConnectionError('Network error occurred while adding domain');
+      toast.error('Network error occurred while adding domain');
+      console.error('Error adding domain:', err);
+    }
+  };
+
+  // Function to handle domain editing
+  const handleEditDomain = async (id, domainData) => {
+    console.log('handleEditDomain called with:', { id, domainData }); // Debugging log
+    try {
+      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/updatedomain.php', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id, ...domainData })
+      });
+      const data = await response.json();
+      console.log('Edit domain response:', data); // Debugging log
+      if (data.status === 'success') {
+        fetchDomains();
+        toast.success('Domain updated successfully!', {
+          position: 'top-right',
+          autoClose: 5000, // Extended duration for visibility
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
+      } else {
+        setConnectionError(data.message || 'Failed to update domain');
+        toast.error(data.message || 'Failed to update domain');
+      }
+    } catch (err) {
+      setConnectionError('Network error occurred while updating domain');
+      toast.error('Network error occurred while updating domain');
+      console.error('Error updating domain:', err);
     }
   };
 
@@ -139,6 +205,20 @@ const Domains = () => {
 
   return (
     <div className="container mx-auto">
+      {/* Toast Container */}
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+      />
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div className="w-full md:w-1/3">
           <div className="relative">
@@ -175,6 +255,8 @@ const Domains = () => {
           <DomainTabs 
             domains={currentDomains} 
             onDelete={handleDelete}
+            onEdit={handleEditDomain}
+            onAdd={handleAddDomain}
             refreshDomains={fetchDomains}
           />
           

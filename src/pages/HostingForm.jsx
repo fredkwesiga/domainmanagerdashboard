@@ -2,70 +2,75 @@ import React, { useState, useEffect } from "react";
 import Input from "../components/ui/Input";
 import Select from "../components/ui/Select";
 import Button from "../components/ui/Button";
-import { format, addDays, addWeeks, addMonths, addYears, parseISO } from "date-fns";
+import { format, addDays, addWeeks, addMonths, addYears } from "date-fns";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
-const HostingForm = ({ initialData, onCancel }) => {
-  const [formData, setFormData] = useState({
-    domainName: "",
-    hostingType: "",
-    owner: {
-      firstName: "",
-      lastName: "",
-    },
-    contact: {
-      email1: "",
-      email2: "",
-      phone1: "",
-      phone2: "",
-    },
-    dates: {
-      startDate: new Date(),
-      expiryDate: null,
-    },
-    package: "",
-    amount: 0,
-    currency: "USD",
-    serverDetails: {
-      ipAddress: "",
-      nameservers: ["", ""],
-      diskSpace: "",
-      bandwidth: ""
+const HostingForm = ({ initialData, onSubmit, onCancel, isEditMode = false }) => {
+  const [formData, setFormData] = useState(
+    initialData || {
+      domainName: "",
+      hostingType: "",
+      owner: {
+        firstName: "",
+        lastName: "",
+      },
+      contact: {
+        email1: "",
+        email2: "",
+        phone1: "",
+        phone2: "",
+      },
+      dates: {
+        startDate: new Date(),
+        expiryDate: null,
+      },
+      package: "",
+      amount: 0,
+      currency: "USD",
+      invoiceStatus: "Pending",
+      serverDetails: {
+        ipAddress: "",
+        nameservers: ["", ""],
+        diskSpace: "",
+        bandwidth: "",
+      },
     }
-  });
+  );
 
   const [packages, setPackages] = useState([]);
   const [isLoadingPackages, setIsLoadingPackages] = useState(true);
   const [domainError, setDomainError] = useState("");
-  const [notification, setNotification] = useState({ show: false, type: "", message: "" });
+  const [formErrors, setFormErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    // Fetch hosting packages from API
     const fetchPackages = async () => {
       try {
         const response = await fetch(
           "https://goldenrod-cattle-809116.hostingersite.com/gethostingpackages.php"
         );
         const data = await response.json();
-        
+
         if (data.status === "success") {
-          const formattedPackages = data.data.map(pkg => ({
+          const formattedPackages = data.data.map((pkg) => ({
             value: pkg.id.toString(),
             label: pkg.packageName,
             duration: pkg.duration,
             price: pkg.amount,
             currency: pkg.currency,
-            hostingType: pkg.hostingType
+            hostingType: pkg.hostingType,
           }));
           setPackages(formattedPackages);
         } else {
-          showNotification("error", "Failed to load hosting packages");
+          toast.error("Failed to load hosting packages");
           setPackages([]);
         }
       } catch (error) {
         console.error("Error fetching hosting packages:", error);
-        showNotification("error", "Failed to load hosting packages");
+        toast.error("Failed to load hosting packages");
         setPackages([]);
       } finally {
         setIsLoadingPackages(false);
@@ -75,40 +80,41 @@ const HostingForm = ({ initialData, onCancel }) => {
     fetchPackages();
   }, []);
 
-  useEffect(() => {
-    if (initialData) {
-      setFormData({
-        ...initialData,
-        dates: {
-          startDate: initialData.dates.startDate
-            ? parseISO(initialData.dates.startDate)
-            : new Date(),
-          expiryDate: initialData.dates.expiryDate
-            ? parseISO(initialData.dates.expiryDate)
-            : null,
-        },
-        currency: initialData.currency || "USD",
-      });
-    }
-  }, [initialData]);
-
-  useEffect(() => {
-    if (notification.show) {
-      const timer = setTimeout(() => {
-        setNotification({ show: false, type: "", message: "" });
-      }, 3000);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [notification.show]);
-
   const validateDomain = (domain) => {
     const pattern = /^(?!:\/\/)([a-zA-Z0-9-]+\.){1,}[a-zA-Z]{2,}$/;
     return pattern.test(domain);
   };
 
+  const validateForm = () => {
+    const errors = {};
+    if (!validateDomain(formData.domainName)) {
+      errors.domainName = "Please enter a valid domain name (e.g., example.com)";
+    }
+    if (!formData.owner.firstName.trim()) {
+      errors["owner.firstName"] = "First name is required";
+    }
+    if (!formData.owner.lastName.trim()) {
+      errors["owner.lastName"] = "Last name is required";
+    }
+    if (!formData.contact.email1.trim()) {
+      errors["contact.email1"] = "Primary email is required";
+    } else if (!/\S+@\S+\.\S+/.test(formData.contact.email1)) {
+      errors["contact.email1"] = "Please enter a valid email address";
+    }
+    if (!formData.contact.phone1.trim()) {
+      errors["contact.phone1"] = "Primary phone is required";
+    }
+    if (!formData.package) {
+      errors.package = "Please select a hosting package";
+    }
+    if (!formData.dates.expiryDate) {
+      errors["dates.expiryDate"] = "Expiry date is required";
+    }
+    return errors;
+  };
+
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
 
     if (name === "domainName") {
       if (!validateDomain(value) && value !== "") {
@@ -118,7 +124,12 @@ const HostingForm = ({ initialData, onCancel }) => {
       }
     }
 
-    if (name.includes(".")) {
+    if (name === "invoiceStatus") {
+      setFormData((prev) => ({
+        ...prev,
+        invoiceStatus: checked ? "Invoiced" : "Pending",
+      }));
+    } else if (name.includes(".")) {
       const [parent, child] = name.split(".");
       setFormData((prev) => ({
         ...prev,
@@ -133,36 +144,41 @@ const HostingForm = ({ initialData, onCancel }) => {
         [name]: value,
       }));
     }
+
+    setFormErrors((prev) => ({
+      ...prev,
+      [name]: "",
+    }));
   };
 
   const handleNameserverChange = (index, value) => {
     const newNameservers = [...formData.serverDetails.nameservers];
     newNameservers[index] = value;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       serverDetails: {
         ...prev.serverDetails,
-        nameservers: newNameservers
-      }
+        nameservers: newNameservers,
+      },
     }));
   };
 
   const calculateExpiryDate = (startDate, selectedPackageId) => {
     if (!startDate || !selectedPackageId) return null;
 
-    const pkg = packages.find(p => p.value === selectedPackageId);
+    const pkg = packages.find((p) => p.value === selectedPackageId);
     if (!pkg) return null;
 
     const { value, unit } = pkg.duration;
-    
-    switch(unit) {
-      case 'day':
+
+    switch (unit) {
+      case "day":
         return addDays(startDate, value);
-      case 'week':
+      case "week":
         return addWeeks(startDate, value);
-      case 'month':
+      case "month":
         return addMonths(startDate, value);
-      case 'year':
+      case "year":
         return addYears(startDate, value);
       default:
         return addMonths(startDate, value);
@@ -171,14 +187,11 @@ const HostingForm = ({ initialData, onCancel }) => {
 
   const handlePackageChange = (e) => {
     const selectedPackageId = e.target.value;
-    const pkg = packages.find(p => p.value === selectedPackageId);
-    
+    const pkg = packages.find((p) => p.value === selectedPackageId);
+
     if (!pkg) return;
 
-    const expiryDate = calculateExpiryDate(
-      formData.dates.startDate,
-      selectedPackageId
-    );
+    const expiryDate = calculateExpiryDate(formData.dates.startDate, selectedPackageId);
 
     setFormData((prev) => ({
       ...prev,
@@ -190,6 +203,12 @@ const HostingForm = ({ initialData, onCancel }) => {
         ...prev.dates,
         expiryDate,
       },
+    }));
+
+    setFormErrors((prev) => ({
+      ...prev,
+      package: "",
+      "dates.expiryDate": "",
     }));
   };
 
@@ -207,6 +226,11 @@ const HostingForm = ({ initialData, onCancel }) => {
       ...prev,
       dates: newDates,
     }));
+
+    setFormErrors((prev) => ({
+      ...prev,
+      "dates.expiryDate": "",
+    }));
   };
 
   const handleExpiryDateChange = (date) => {
@@ -217,6 +241,11 @@ const HostingForm = ({ initialData, onCancel }) => {
         expiryDate: date,
       },
     }));
+
+    setFormErrors((prev) => ({
+      ...prev,
+      "dates.expiryDate": "",
+    }));
   };
 
   const handleCurrencyChange = (e) => {
@@ -226,76 +255,100 @@ const HostingForm = ({ initialData, onCancel }) => {
     }));
   };
 
-  const showNotification = (type, message) => {
-    setNotification({ show: true, type, message });
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (domainError) {
-      showNotification("error", "Please fix domain name errors before submitting");
+    const errors = validateForm();
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      toast.error("Please fill all required fields correctly");
       return;
     }
 
-    if (!validateDomain(formData.domainName)) {
-      showNotification("error", "Please enter a valid domain name");
-      return;
-    }
-
+    setIsSubmitting(true);
     const submissionData = {
-      ...formData,
+      domainName: formData.domainName,
+      hostingType: formData.hostingType,
+      owner: {
+        firstName: formData.owner.firstName,
+        lastName: formData.owner.lastName,
+      },
+      contact: {
+        email1: formData.contact.email1,
+        email2: formData.contact.email2,
+        phone1: formData.contact.phone1,
+        phone2: formData.contact.phone2,
+      },
       dates: {
         startDate: format(formData.dates.startDate, "yyyy-MM-dd"),
         expiryDate: formData.dates.expiryDate
           ? format(formData.dates.expiryDate, "yyyy-MM-dd")
           : "",
       },
+      package: formData.package,
+      amount: formData.amount,
+      currency: formData.currency,
+      invoiceStatus: formData.invoiceStatus,
+      serverDetails: {
+        ipAddress: formData.serverDetails.ipAddress,
+        nameservers: formData.serverDetails.nameservers,
+        diskSpace: formData.serverDetails.diskSpace,
+        bandwidth: formData.serverDetails.bandwidth,
+      },
     };
 
     try {
-      const response = await fetch(
-        "https://goldenrod-cattle-809116.hostingersite.com/addhosting.php",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(submissionData),
-        }
-      );
-
-      const result = await response.json();
-
-      if (result.status === "success") {
-        showNotification("success", result.message || "Hosting added successfully!");
-        setFormData({
-          domainName: "",
-          hostingType: "",
-          owner: { firstName: "", lastName: "" },
-          contact: { email1: "", email2: "", phone1: "", phone2: "" },
-          dates: {
-            startDate: new Date(),
-            expiryDate: null,
-          },
-          package: "",
-          amount: 0,
-          currency: "USD",
-          serverDetails: {
-            ipAddress: "",
-            nameservers: ["", ""],
-            diskSpace: "",
-            bandwidth: ""
-          }
-        });
-      } else if (result.message === "Hosting already exists or is duplicated") {
-        showNotification("error", "Hosting already exists for this domain!");
+      if (isEditMode) {
+        await onSubmit(submissionData);
       } else {
-        showNotification("error", result.message || "Something went wrong");
+        const response = await fetch(
+          "https://goldenrod-cattle-809116.hostingersite.com/addhosting.php",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(submissionData),
+          }
+        );
+
+        const result = await response.json();
+
+        if (result.status === "success") {
+          toast.success(result.message || "Hosting added successfully!");
+          setFormData({
+            domainName: "",
+            hostingType: "",
+            owner: { firstName: "", lastName: "" },
+            contact: { email1: "", email2: "", phone1: "", phone2: "" },
+            dates: {
+              startDate: new Date(),
+              expiryDate: null,
+            },
+            package: "",
+            amount: 0,
+            currency: "USD",
+            invoiceStatus: "Pending",
+            serverDetails: {
+              ipAddress: "",
+              nameservers: ["", ""],
+              diskSpace: "",
+              bandwidth: "",
+            },
+          });
+          setFormErrors({});
+          if (!isEditMode) {
+            setTimeout(() => (window.location.href = "/hosting"), 2000);
+          }
+        } else {
+          toast.error(result.message || "Failed to add hosting");
+        }
       }
     } catch (error) {
-      showNotification("error", "Network or server error");
+      toast.error("Network or server error");
       console.error("Error:", error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -304,7 +357,7 @@ const HostingForm = ({ initialData, onCancel }) => {
       className={`
         w-full px-3 py-2 text-xs text-left border border-gray-300 rounded-lg
         focus:ring-2 focus:ring-indigo-900 focus:border-blue-500 bg-white
-        ${disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}
+        ${disabled ? "bg-gray-100 text-gray-400 cursor-not-allowed" : ""}
       `}
       onClick={onClick}
       ref={ref}
@@ -330,10 +383,9 @@ const HostingForm = ({ initialData, onCancel }) => {
       )}
     </button>
   ));
-  
+
   const packageOptions = packages.map((pkg) => {
-    const durationText = `${pkg.duration.value} ${pkg.duration.unit}${pkg.duration.value !== 1 ? 's' : ''}`;
-    
+    const durationText = `${pkg.duration.value} ${pkg.duration.unit}${pkg.duration.value !== 1 ? "s" : ""}`;
     return {
       value: pkg.value,
       label: `${pkg.label} (${pkg.hostingType} - ${pkg.currency} ${pkg.price} - ${durationText})`,
@@ -357,20 +409,20 @@ const HostingForm = ({ initialData, onCancel }) => {
 
   return (
     <div className="bg-white p-6 rounded-xl shadow-lg mx-auto text-xs">
-      {notification.show && (
-        <div 
-          className={`mb-4 p-3 rounded-lg ${
-            notification.type === "success" 
-              ? "bg-green-100 border border-green-200 text-green-800" 
-              : "bg-red-100 border border-red-200 text-red-800"
-          }`}
-        >
-          {notification.message}
-        </div>
-      )}
-      
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+      />
       <h2 className="text-2xl font-bold mb-6 text-gray-800 border-b pb-4">
-        {initialData ? "Edit Hosting" : "Add New Hosting"}
+        {isEditMode ? "Edit Hosting" : "Add New Hosting"}
       </h2>
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Domain Info */}
@@ -400,6 +452,9 @@ const HostingForm = ({ initialData, onCancel }) => {
               {domainError && (
                 <p className="mt-1 text-xs text-red-500">{domainError}</p>
               )}
+              {formErrors.domainName && (
+                <p className="mt-1 text-xs text-red-500">{formErrors.domainName}</p>
+              )}
             </div>
           </div>
         </div>
@@ -410,20 +465,30 @@ const HostingForm = ({ initialData, onCancel }) => {
             Owner Information
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              label="First Name"
-              name="owner.firstName"
-              value={formData.owner.firstName}
-              onChange={handleChange}
-              required
-            />
-            <Input
-              label="Last Name"
-              name="owner.lastName"
-              value={formData.owner.lastName}
-              onChange={handleChange}
-              required
-            />
+            <div>
+              <Input
+                label="First Name"
+                name="owner.firstName"
+                value={formData.owner.firstName}
+                onChange={handleChange}
+                required
+              />
+              {formErrors["owner.firstName"] && (
+                <p className="mt-1 text-xs text-red-500">{formErrors["owner.firstName"]}</p>
+              )}
+            </div>
+            <div>
+              <Input
+                label="Last Name"
+                name="owner.lastName"
+                value={formData.owner.lastName}
+                onChange={handleChange}
+                required
+              />
+              {formErrors["owner.lastName"] && (
+                <p className="mt-1 text-xs text-red-500">{formErrors["owner.lastName"]}</p>
+              )}
+            </div>
           </div>
         </div>
 
@@ -433,14 +498,19 @@ const HostingForm = ({ initialData, onCancel }) => {
             Contact Details
           </h3>
           <div className="space-y-4">
-            <Input
-              label="Primary Email"
-              name="contact.email1"
-              type="email"
-              value={formData.contact.email1}
-              onChange={handleChange}
-              required
-            />
+            <div>
+              <Input
+                label="Primary Email"
+                name="contact.email1"
+                type="email"
+                value={formData.contact.email1}
+                onChange={handleChange}
+                required
+              />
+              {formErrors["contact.email1"] && (
+                <p className="mt-1 text-xs text-red-500">{formErrors["contact.email1"]}</p>
+              )}
+            </div>
             <Input
               label="Secondary Email (Optional)"
               name="contact.email2"
@@ -449,14 +519,19 @@ const HostingForm = ({ initialData, onCancel }) => {
               onChange={handleChange}
             />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input
-                label="Primary Phone"
-                name="contact.phone1"
-                type="tel"
-                value={formData.contact.phone1}
-                onChange={handleChange}
-                required
-              />
+              <div>
+                <Input
+                  label="Primary Phone"
+                  name="contact.phone1"
+                  type="tel"
+                  value={formData.contact.phone1}
+                  onChange={handleChange}
+                  required
+                />
+                {formErrors["contact.phone1"] && (
+                  <p className="mt-1 text-xs text-red-500">{formErrors["contact.phone1"]}</p>
+                )}
+              </div>
               <Input
                 label="Secondary Phone (Optional)"
                 name="contact.phone2"
@@ -515,17 +590,22 @@ const HostingForm = ({ initialData, onCancel }) => {
             Hosting Plan
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-            <Select
-              label="Package"
-              name="package"
-              labelClassName="text-xs"
-              value={formData.package}
-              onChange={handlePackageChange}
-              options={packageOptions}
-              required
-              isLoading={isLoadingPackages}
-              placeholder={isLoadingPackages ? "Loading packages..." : "Select a package"}
-            />
+            <div>
+              <Select
+                label="Package"
+                name="package"
+                labelClassName="text-xs"
+                value={formData.package}
+                onChange={handlePackageChange}
+                options={packageOptions}
+                required
+                isLoading={isLoadingPackages}
+                placeholder={isLoadingPackages ? "Loading packages..." : "Select a package"}
+              />
+              {formErrors.package && (
+                <p className="mt-1 text-xs text-red-500">{formErrors.package}</p>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-2">
               <Input
                 label="Amount"
@@ -585,18 +665,42 @@ const HostingForm = ({ initialData, onCancel }) => {
                   disabled={!formData.package}
                   popperPlacement="bottom-start"
                 />
+                {formErrors["dates.expiryDate"] && (
+                  <p className="mt-1 text-xs text-red-500">{formErrors["dates.expiryDate"]}</p>
+                )}
               </div>
             </div>
           </div>
         </div>
 
+        {/* Invoice Status */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+            Invoice Status
+          </h3>
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="invoiceStatus"
+              name="invoiceStatus"
+              checked={formData.invoiceStatus === "Invoiced"}
+              onChange={handleChange}
+              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+            />
+            <label htmlFor="invoiceStatus" className="ml-2 block text-xs text-gray-700">
+              Invoiced
+            </label>
+          </div>
+        </div>
+
         {/* Buttons */}
         <div className="flex flex-col sm:flex-row justify-end gap-3 pt-6 border-t">
-          {onCancel && (
+          {isEditMode && (
             <Button
               type="button"
+              className="bg-gray-200 text-gray-800 px-6 py-2 rounded-lg hover:bg-gray-300 transition text-xs"
               onClick={onCancel}
-              className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium px-6 py-2 rounded-lg transition-colors text-xs"
+              disabled={isSubmitting}
             >
               Cancel
             </Button>
@@ -604,62 +708,12 @@ const HostingForm = ({ initialData, onCancel }) => {
           <Button
             type="submit"
             className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium px-6 py-2 rounded-lg transition-all shadow-md hover:shadow-lg text-xs"
-            disabled={domainError || isLoadingPackages}
+            disabled={domainError || isLoadingPackages || isSubmitting}
           >
-            {initialData ? "Update Hosting" : "+ Add Hosting"}
+            {isEditMode ? "Update Hosting" : "+ Add Hosting"}
           </Button>
         </div>
       </form>
-
-      <style dangerouslySetInnerHTML={{__html: `
-        .react-datepicker {
-          font-family: "Inter", sans-serif;
-          border: 1px solid #e5e7eb;
-          border-radius: 0.5rem;
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
-            0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        }
-        .react-datepicker__header {
-          background-color: #f9fafb;
-          border-bottom: 1px solid #e5e7eb;
-          border-top-left-radius: 0.5rem;
-          border-top-right-radius: 0.5rem;
-          padding-top: 0.5rem;
-        }
-        .react-datepicker__current-month {
-          font-weight: 600;
-          color: #111827;
-        }
-        .react-datepicker__day-name {
-          color: #6b7280;
-          font-weight: 500;
-        }
-        .react-datepicker__day {
-          color: #111827;
-          margin: 0.2rem;
-        }
-        .react-datepicker__day--selected {
-          background-color: #3b82f6;
-          color: white;
-          border-radius: 0.375rem;
-        }
-        .react-datepicker__day--selected:hover {
-          background-color: #2563eb;
-        }
-        .react-datepicker__day:hover {
-          border-radius: 0.375rem;
-          background-color: #f3f4f6;
-        }
-        .react-datepicker__navigation {
-          top: 0.5rem;
-        }
-        .react-datepicker__navigation--previous {
-          left: 1rem;
-        }
-        .react-datepicker__navigation--next {
-          right: 1rem;
-        }
-      `}} />
     </div>
   );
 };
