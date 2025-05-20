@@ -1,72 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Tab } from '@headlessui/react';
 import { FiSearch, FiX, FiEye, FiEdit, FiTrash, FiMoreVertical } from 'react-icons/fi';
-import { toast } from 'react-toastify';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
-
-// Mock subscription data with professional tech tools
-const mockSubscriptionData = [
-  {
-    planName: 'Figma Professional',
-    type: 'Monthly',
-    cost: 12.00,
-    status: 'Active',
-    cycle: 'Monthly',
-    nextDueDate: '2025-06-15',
-    domain: 'design.example.com',
-    customer: 'Alice Thompson',
-    customerEmail: 'alice@techco.com',
-    customerPhone: '+1234567890',
-    startDate: '2024-06-15',
-    method: 'Credit Card',
-  },
-  {
-    planName: 'Slack Pro',
-    type: 'Annual',
-    cost: 87.00, // $7.25/user/month * 12 months
-    status: 'Expiring Soon',
-    cycle: 'Yearly',
-    nextDueDate: '2025-05-12',
-    domain: 'teamchat.example.com',
-    customer: 'Bob Martinez',
-    customerEmail: 'bob@techco.com',
-    customerPhone: '+1987654321',
-    startDate: '2024-05-12',
-    method: 'PayPal',
-  },
-  {
-    planName: 'AWS EC2 Instance',
-    type: 'Monthly',
-    cost: 100.00,
-    status: 'Expired',
-    cycle: 'Monthly',
-    nextDueDate: '2025-04-10',
-    domain: 'cloud.example.com',
-    customer: 'Clara Nguyen',
-    customerEmail: 'clara@techco.com',
-    customerPhone: '+1122334455',
-    startDate: '2024-04-10',
-    method: 'Bank Transfer',
-  },
-  {
-    planName: 'GitHub Enterprise',
-    type: 'Annual',
-    cost: 252.00, // $21/user/month * 12 months
-    status: 'Active',
-    cycle: 'Yearly',
-    nextDueDate: '2025-07-01',
-    domain: 'code.example.com',
-    customer: 'David Kim',
-    customerEmail: 'david@techco.com',
-    customerPhone: '+1098765432',
-    startDate: '2024-07-01',
-    method: 'Credit Card',
-  },
-];
 
 const Subscription = () => {
   const navigate = useNavigate();
-  const [subscriptionData, setSubscriptionData] = useState(mockSubscriptionData);
+  const [subscriptionData, setSubscriptionData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [stats, setStats] = useState({
@@ -80,10 +21,55 @@ const Subscription = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [selectedSubscription, setSelectedSubscription] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editingSubscription, setEditingSubscription] = useState(null);
+  const [selectedSubscription, setSelectedSubscription] = useState(null);
+  const [editForm, setEditForm] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+
+  // Fetch subscriptions from API
+  const fetchSubscriptions = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/getsubscriptions.php');
+      const data = await response.json();
+      if (data.status === 'success') {
+        const subscriptions = data.data.map(item => ({
+          id: item.id,
+          planName: item.planName,
+          type: item.type,
+          cost: item.cost,
+          currency: item.currency || 'USD',
+          status: item.status,
+          cycle: item.cycle,
+          nextDueDate: item.nextDueDate,
+          domain: item.domain,
+          customer: `${item.customer.firstName} ${item.customer.lastName}`.trim(),
+          customerEmail: item.customer.email,
+          customerPhone: item.customer.phone,
+          startDate: item.startDate,
+          method: item.method,
+        }));
+        setSubscriptionData(subscriptions);
+        setFilteredData(subscriptions);
+        calculateStats(subscriptions);
+      } else {
+        throw new Error(data.message || 'Failed to fetch subscriptions');
+      }
+    } catch (err) {
+      setError(err.message || 'Network error occurred while fetching subscriptions');
+      toast.error(err.message || 'Failed to fetch subscriptions');
+      console.error('Error fetching subscriptions:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSubscriptions();
+  }, []);
 
   // Calculate statistics for tabs
   const calculateStats = (data) => {
@@ -197,21 +183,25 @@ const Subscription = () => {
       default:
         filtered = subscriptionData;
     }
+
+    // Apply search query
+    if (searchQuery) {
+      filtered = filtered.filter(
+        (item) =>
+          item.planName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.domain.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.customer.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
     setFilteredData(filtered);
+    setCurrentPage(1); // Reset to first page when filtering
   };
 
   // Handle search
   const handleSearch = (e) => {
-    const query = e.target.value.toLowerCase();
-    setSearchQuery(query);
-    const filtered = subscriptionData.filter(
-      (item) =>
-        item.planName.toLowerCase().includes(query) ||
-        item.domain.toLowerCase().includes(query) ||
-        item.customer.toLowerCase().includes(query)
-    );
-    setFilteredData(filtered);
-    calculateStats(filtered);
+    setSearchQuery(e.target.value);
+    filterData(0); // Reset to "All Services" tab when searching
   };
 
   // Format date to DD/MM/YYYY for display
@@ -222,177 +212,297 @@ const Subscription = () => {
       .padStart(2, '0')}/${date.getFullYear()}`;
   };
 
-  // Format date to YYYY-MM-DD for input fields
+  // Format date for input fields (YYYY-MM-DD)
   const formatDateForInput = (dateString) => {
     const date = new Date(dateString);
-    return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date
-      .getDate()
-      .toString()
-      .padStart(2, '0')}`;
-  };
-
-  // API-Ready Functions
-  const addSubscription = async (newSubscription) => {
-    setLoading(true);
-    try {
-      console.log('Adding subscription:', newSubscription);
-      setSubscriptionData([...subscriptionData, newSubscription]);
-      calculateStats([...subscriptionData, newSubscription]);
-      filterData(0);
-      toast.success('Service added successfully!', {
-        position: 'top-right',
-        autoClose: 2000,
-      });
-      return newSubscription;
-    } catch (err) {
-      setError(err.message || 'Failed to add service');
-      toast.error('Failed to add service', {
-        position: 'top-right',
-        autoClose: 2000,
-      });
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const editSubscription = async (updatedSubscription) => {
-    setLoading(true);
-    try {
-      console.log('Editing subscription:', updatedSubscription);
-      const updatedData = subscriptionData.map((item) =>
-        item.planName === updatedSubscription.planName ? updatedSubscription : item
-      );
-      setSubscriptionData(updatedData);
-      calculateStats(updatedData);
-      filterData(0);
-      toast.success('Service updated successfully!', {
-        position: 'top-right',
-        autoClose: 2000,
-      });
-      return updatedSubscription;
-    } catch (err) {
-      setError(err.message || 'Failed to edit service');
-      toast.error('Failed to edit service', {
-        position: 'top-right',
-        autoClose: 2000,
-      });
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const deleteSubscription = async (planName) => {
-    setLoading(true);
-    try {
-      console.log('Deleting subscription:', planName);
-      const updatedData = subscriptionData.filter((item) => item.planName !== planName);
-      setSubscriptionData(updatedData);
-      calculateStats(updatedData);
-      filterData(0);
-      toast.success('Service deleted successfully!', {
-        position: 'top-right',
-        autoClose: 2000,
-      });
-    } catch (err) {
-      setError(err.message || 'Failed to delete service');
-      toast.error('Failed to delete service', {
-        position: 'top-right',
-        autoClose: 2000,
-      });
-      throw err;
-    } finally {
-      setLoading(false);
-    }
+    return date.toISOString().split('T')[0];
   };
 
   // Handle View action
   const handleView = (subscription) => {
     setSelectedSubscription(subscription);
     setShowModal(true);
+    setShowEditModal(false);
     setDropdownOpen(null);
   };
 
   // Handle Edit action
   const handleEdit = (subscription) => {
-    setEditingSubscription({
-      ...subscription,
-      customerFirstName: subscription.customer.split(' ')[0],
-      customerLastName: subscription.customer.split(' ')[1] || '',
-      primaryEmail: subscription.customerEmail,
-      primaryPhone: subscription.customerPhone,
+    setEditForm({
+      id: subscription.id,
+      planName: subscription.planName,
+      type: subscription.type,
+      cost: subscription.cost,
+      currency: subscription.currency || 'USD',
+      status: subscription.status,
+      cycle: subscription.cycle,
+      nextDueDate: formatDateForInput(subscription.nextDueDate),
+      domain: subscription.domain,
+      customer: {
+        firstName: subscription.customer.split(' ')[0] || '',
+        lastName: subscription.customer.split(' ').slice(1).join(' ') || '',
+        email: subscription.customerEmail,
+        phone: subscription.customerPhone || '',
+      },
+      startDate: formatDateForInput(subscription.startDate),
+      method: subscription.method || '',
     });
+    setSelectedSubscription(subscription);
     setShowEditModal(true);
+    setShowModal(false);
     setDropdownOpen(null);
   };
 
   // Handle Edit form changes
-  const handleEditChange = (e) => {
-    const { name, value } = e.target;
-    setEditingSubscription((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+  const handleEditChange = (e, field, subField = null) => {
+    const { value } = e.target;
+    setEditForm((prev) => {
+      if (subField) {
+        return {
+          ...prev,
+          [field]: {
+            ...prev[field],
+            [subField]: value,
+          },
+        };
+      }
+      return {
+        ...prev,
+        [field]: value,
+      };
+    });
   };
 
-  // Handle Edit form submission
-  const handleEditSubmit = async () => {
+  // Handle Edit submission
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    await editSubscription(editForm);
+  };
+
+  // Edit subscription via API
+  const editSubscription = async (subscription) => {
+    setLoading(true);
     try {
-      const updatedSubscription = {
-        ...editingSubscription,
-        customer: `${editingSubscription.customerFirstName} ${editingSubscription.customerLastName}`.trim(),
-        customerEmail: editingSubscription.primaryEmail,
-        customerPhone: editingSubscription.primaryPhone,
-      };
-      await editSubscription(updatedSubscription);
-      setShowEditModal(false);
-      setEditingSubscription(null);
+      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/updatesubscriptions.php', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(subscription),
+      });
+      const result = await response.json();
+      if (result.status === 'success') {
+        toast.success(result.message);
+        setSubscriptionData((prev) =>
+          prev.map((item) =>
+            item.id === subscription.id
+              ? {
+                  ...item,
+                  planName: subscription.planName,
+                  type: subscription.type,
+                  cost: parseFloat(subscription.cost),
+                  currency: subscription.currency,
+                  status: subscription.status,
+                  cycle: subscription.cycle,
+                  nextDueDate: subscription.nextDueDate,
+                  domain: subscription.domain,
+                  customer: `${subscription.customer.firstName} ${subscription.customer.lastName}`.trim(),
+                  customerEmail: subscription.customer.email,
+                  customerPhone: subscription.customer.phone,
+                  startDate: subscription.startDate,
+                  method: subscription.method,
+                }
+              : item
+          )
+        );
+        setFilteredData((prev) =>
+          prev.map((item) =>
+            item.id === subscription.id
+              ? {
+                  ...item,
+                  planName: subscription.planName,
+                  type: subscription.type,
+                  cost: parseFloat(subscription.cost),
+                  currency: subscription.currency,
+                  status: subscription.status,
+                  cycle: subscription.cycle,
+                  nextDueDate: subscription.nextDueDate,
+                  domain: subscription.domain,
+                  customer: `${subscription.customer.firstName} ${subscription.customer.lastName}`.trim(),
+                  customerEmail: subscription.customer.email,
+                  customerPhone: subscription.customer.phone,
+                  startDate: subscription.startDate,
+                  method: subscription.method,
+                }
+              : item
+          )
+        );
+        calculateStats(subscriptionData);
+        setShowEditModal(false);
+      } else {
+        toast.error(result.message);
+      }
     } catch (err) {
-      // Error is handled in editSubscription
+      toast.error('Failed to update subscription');
+      console.error('Error updating subscription:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
   // Handle Delete action
-  const handleDelete = async (planName) => {
-    if (window.confirm('Are you sure you want to delete this service?')) {
-      try {
-        await deleteSubscription(planName);
-        setDropdownOpen(null);
-      } catch (err) {
-        // Error is handled in deleteSubscription
+  const handleDelete = (subscription) => {
+    if (window.confirm('Are you sure you want to delete this subscription?')) {
+      deleteSubscription(subscription.id);
+    }
+    setDropdownOpen(null);
+  };
+
+  // Delete subscription via API
+  const deleteSubscription = async (id) => {
+    setLoading(true);
+    try {
+      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/deletesubscriptions.php', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id }),
+      });
+      const result = await response.json();
+      if (result.status === 'success') {
+        toast.success(result.message);
+        setSubscriptionData((prev) => prev.filter((item) => item.id !== id));
+        setFilteredData((prev) => prev.filter((item) => item.id !== id));
+        calculateStats(subscriptionData.filter((item) => item.id !== id));
+      } else {
+        toast.error(result.message);
       }
+    } catch (err) {
+      toast.error('Failed to delete subscription');
+      console.error('Error deleting subscription:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Handle Add New Service button
-  const handleAddNewSubscription = () => {
-    navigate('/subscriptions/add');
-  };
-
-  // Handle dropdown toggle with debugging
-  const handleDropdownToggle = (planName, e) => {
+  // Handle dropdown toggle
+  const handleDropdownToggle = (id, e) => {
     e.stopPropagation();
-    console.log('Dropdown clicked for:', planName); // Debug click
-    setDropdownOpen(dropdownOpen === planName ? null : planName);
+    setDropdownOpen(dropdownOpen === id ? null : id);
   };
 
-  useEffect(() => {
-    setFilteredData(subscriptionData);
-    calculateStats(subscriptionData);
-  }, [subscriptionData]);
+  // Pagination logic
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredData.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+
+  // Change page
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+
+  // Generate page numbers with ellipsis
+  const getPageNumbers = () => {
+    const pageNumbers = [];
+    const maxVisiblePages = 3;
+
+    if (totalPages <= maxVisiblePages + 2) {
+      for (let i = 1; i <= totalPages; i++) {
+        pageNumbers.push(i);
+      }
+    } else {
+      pageNumbers.push(1);
+      let startPage = Math.max(2, currentPage - 1);
+      let endPage = Math.min(totalPages - 1, currentPage + 1);
+
+      if (currentPage <= maxVisiblePages - 1) {
+        endPage = maxVisiblePages;
+      } else if (currentPage >= totalPages - (maxVisiblePages - 2)) {
+        startPage = totalPages - (maxVisiblePages - 1);
+      }
+
+      if (startPage > 2) {
+        pageNumbers.push('...');
+      }
+
+      for (let i = startPage; i <= endPage; i++) {
+        pageNumbers.push(i);
+      }
+
+      if (endPage < totalPages - 1) {
+        pageNumbers.push('...');
+      }
+
+      pageNumbers.push(totalPages);
+    }
+
+    return pageNumbers;
+  };
+
+  // Options for select fields
+  const subscriptionTypeOptions = [
+    { value: 'basic', label: 'Basic Subscription' },
+    { value: 'standard', label: 'Standard Subscription' },
+    { value: 'premium', label: 'Premium Subscription' },
+    { value: 'enterprise', label: 'Enterprise Subscription' },
+  ];
+
+  const currencyOptions = [
+    { value: 'USD', label: 'US Dollar', symbol: '$' },
+    { value: 'EUR', label: 'Euro', symbol: '€' },
+    { value: 'GBP', label: 'British Pound Sterling', symbol: '£' },
+    { value: 'UGX', label: 'Ugandan Shilling', symbol: 'USh' },
+  ];
+
+  const billingCycleOptions = [
+    { value: 'monthly', label: 'Monthly' },
+    { value: 'quarterly', label: 'Quarterly' },
+    { value: 'yearly', label: 'Yearly' },
+  ];
+
+  const paymentMethodOptions = [
+    { value: '', label: 'Select payment method' },
+    { value: 'Credit Card', label: 'Credit Card' },
+    { value: 'PayPal', label: 'PayPal' },
+    { value: 'Bank Transfer', label: 'Bank Transfer' },
+  ];
+
+  const statusOptions = [
+    { value: 'Active', label: 'Active' },
+    { value: 'Expiring Soon', label: 'Expiring Soon' },
+    { value: 'Expired', label: 'Expired' },
+    { value: 'Cancelled', label: 'Cancelled' },
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+      />
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Services</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Subscriptions</h1>
+          <button
+            onClick={() => navigate('/subscriptions/add')}
+            className="mt-4 md:mt-0 bg-indigo-900 text-white font-medium rounded-md text-xs px-4 py-2 hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            + Add Subscription
+          </button>
         </div>
 
-        {/* Search and Tabs */}
+        {/* Search */}
         <div className="bg-white shadow rounded-lg overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+          <div className="px-6 py-4 border-b border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div className="relative w-full max-w-xs">
               <FiSearch
                 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
@@ -400,18 +510,12 @@ const Subscription = () => {
               />
               <input
                 type="text"
-                placeholder="Search services..."
+                placeholder="Search subscriptions..."
                 value={searchQuery}
                 onChange={handleSearch}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <button
-              onClick={handleAddNewSubscription}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-semibold rounded-md shadow-sm text-white bg-indigo-900 hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              + Add New Service
-            </button>
           </div>
 
           {/* Tabs */}
@@ -486,7 +590,7 @@ const Subscription = () => {
             </Tab.List>
 
             <Tab.Panels>
-              {Array.from({ length: 6 }).map((_, tabIndex) => (
+              {[0, 1, 2, 3, 4, 5].map((tabIndex) => (
                 <Tab.Panel key={tabIndex}>
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
@@ -514,88 +618,99 @@ const Subscription = () => {
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {filteredData.map((item, index) => {
-                          const status = getStatus(item.nextDueDate, item.status);
-                          return (
-                            <tr key={`${item.planName}-${index}`}>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <input
-                                  type="checkbox"
-                                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                                />
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex items-center">
-                                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-medium">
-                                    {item.planName.charAt(0)}
-                                  </div>
-                                  <div className="ml-4">
-                                    <div className="text-sm font-medium text-gray-900">
-                                      {item.planName}
+                        {currentItems.length > 0 ? (
+                          currentItems.map((item) => {
+                            const status = getStatus(item.nextDueDate, item.status);
+                            return (
+                              <tr key={item.id}>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                  />
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center">
+                                    <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-medium">
+                                      {item.planName.charAt(0)}
                                     </div>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {item.type}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                ${item.cost.toFixed(2)}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span
-                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status.color}`}
-                                >
-                                  {status.text}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <div className="relative inline-block text-left">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => handleDropdownToggle(item.planName, e)}
-                                    className="focus:outline-none"
-                                  >
-                                    <FiMoreVertical
-                                      className="text-gray-400 cursor-pointer hover:text-gray-600"
-                                      size={16}
-                                    />
-                                  </button>
-                                  {dropdownOpen === item.planName && (
-                                    <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
-                                      <div className="py-1" role="menu" aria-orientation="vertical">
-                                        <button
-                                          onClick={() => handleView(item)}
-                                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
-                                          role="menuitem"
-                                        >
-                                          <FiEye className="mr-2" size={16} />
-                                          View Details
-                                        </button>
-                                        <button
-                                          onClick={() => handleEdit(item)}
-                                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
-                                          role="menuitem"
-                                        >
-                                          <FiEdit className="mr-2" size={16} />
-                                          Edit
-                                        </button>
-                                        <button
-                                          onClick={() => handleDelete(item.planName)}
-                                          className="flex items-center px-4 py-2 text-sm text-red-700 hover:bg-gray-100 w-full text-left"
-                                          role="menuitem"
-                                        >
-                                          <FiTrash className="mr-2" size={16} />
-                                          Delete
-                                        </button>
+                                    <div className="ml-4">
+                                      <div className="text-sm font-medium text-gray-900">
+                                        {item.planName}
+                                      </div>
+                                      <div className="text-sm text-gray-500">
+                                        {item.customerEmail}
                                       </div>
                                     </div>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {item.type}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {item.currency} {item.cost.toFixed(2)}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span
+                                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status.color}`}
+                                  >
+                                    {status.text}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                  <div className="relative inline-block text-left">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => handleDropdownToggle(item.id, e)}
+                                      className="focus:outline-none"
+                                    >
+                                      <FiMoreVertical
+                                        className="text-gray-400 cursor-pointer hover:text-gray-600"
+                                        size={16}
+                                      />
+                                    </button>
+                                    {dropdownOpen === item.id && (
+                                      <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
+                                        <div className="py-1" role="menu" aria-orientation="vertical">
+                                          <button
+                                            onClick={() => handleView(item)}
+                                            className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                                            role="menuitem"
+                                          >
+                                            <FiEye className="mr-2" size={16} />
+                                            View Details
+                                          </button>
+                                          <button
+                                            onClick={() => handleEdit(item)}
+                                            className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                                            role="menuitem"
+                                          >
+                                            <FiEdit className="mr-2" size={16} />
+                                            Edit Service
+                                          </button>
+                                          <button
+                                            onClick={() => handleDelete(item)}
+                                            className="flex items-center px-4 py-2 text-sm text-red-600 hover:bg-gray-100 w-full text-left"
+                                            role="menuitem"
+                                          >
+                                            <FiTrash className="mr-2" size={16} />
+                                            Delete Service
+                                          </button>
+                                        </div>
+                                       </div>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        ) : (
+                          <tr>
+                            <td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">
+                              No subscriptions found.
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -605,12 +720,46 @@ const Subscription = () => {
           </Tab.Group>
         </div>
 
+        {/* Pagination */}
+        <div className="flex flex-col md:flex-row items-center justify-between mt-6 px-6">
+          <div className="text-xs text-gray-500 mb-4 md:mb-0">
+            Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredData.length)} of {filteredData.length} records
+          </div>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => paginate(currentPage - 1)}
+              disabled={currentPage === 1}
+              className={`px-3 py-1 rounded-md text-xs ${currentPage === 1 ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-indigo-900 text-white hover:bg-indigo-600'}`}
+            >
+              Prev
+            </button>
+            <div className="flex space-x-1">
+              {getPageNumbers().map((number, index) => (
+                <button
+                  key={index}
+                  onClick={() => typeof number === 'number' ? paginate(number) : null}
+                  className={`px-3 py-1 rounded-md text-xs ${currentPage === number ? 'bg-indigo-900 text-white' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'} ${typeof number !== 'number' ? 'cursor-default' : ''}`}
+                  disabled={number === '...'}
+                >
+                  {number}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => paginate(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className={`px-3 py-1 rounded-md text-xs ${currentPage === totalPages ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-indigo-900 text-white hover:bg-indigo-600'}`}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+
         {/* View Modal */}
         {showModal && selectedSubscription && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-lg w-full max-w-md">
-              {/* Header */}
-              <div className="bg-indigo-800 text-white p-3 rounded-t-lg flex justify-between items-center">
+              <div className="bg-indigo-900 text-white p-3 rounded-t-lg flex justify-between items-center">
                 <h2 className="text-xl font-bold">Service Details</h2>
                 <button
                   onClick={() => setShowModal(false)}
@@ -619,9 +768,7 @@ const Subscription = () => {
                   <FiX size={20} />
                 </button>
               </div>
-
-              {/* Service status badge and name */}
-              <div className="bg-indigo-800 text-white px-3 pb-3 flex items-center">
+              <div className="bg-indigo-900 text-white px-3 pb-3 flex items-center">
                 <span
                   className={`px-3 py-1 rounded-full text-sm font-medium ${getStatus(
                     selectedSubscription.nextDueDate,
@@ -632,8 +779,6 @@ const Subscription = () => {
                 </span>
                 <span className="text-lg ml-2">{selectedSubscription.planName}</span>
               </div>
-
-              {/* Service Information Section */}
               <div className="p-4">
                 <div className="flex items-start mb-4">
                   <div className="bg-indigo-100 p-2 rounded-lg mr-3">
@@ -650,6 +795,8 @@ const Subscription = () => {
                       Service Information
                     </h3>
                     <div className="grid grid-cols-2 gap-y-2 text-sm">
+                      <div className="text-gray-500">ID</div>
+                      <div className="text-right font-medium">{selectedSubscription.id}</div>
                       <div className="text-gray-500">Domain</div>
                       <div className="text-right font-medium">{selectedSubscription.domain}</div>
                       <div className="text-gray-500">Cycle</div>
@@ -667,8 +814,6 @@ const Subscription = () => {
                     </div>
                   </div>
                 </div>
-
-                {/* Customer Information Section */}
                 <div className="flex items-start">
                   <div className="bg-purple-100 p-2 rounded-lg mr-3">
                     <svg
@@ -702,12 +847,10 @@ const Subscription = () => {
                   </div>
                 </div>
               </div>
-
-              {/* Footer button */}
               <div className="p-3 rounded-b-lg">
                 <button
                   onClick={() => setShowModal(false)}
-                  className="w-full py-2 bg-indigo-800 text-white font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-sm"
+                  className="w-full py-2 bg-indigo-900 text-white font-medium rounded-md hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 text-xs"
                 >
                   Close Details
                 </button>
@@ -717,147 +860,236 @@ const Subscription = () => {
         )}
 
         {/* Edit Modal */}
-        {showEditModal && editingSubscription && (
+        {showEditModal && editForm && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl">
-              <div className="p-4">
-                <h2 className="text-xl font-bold mb-4">Edit Service</h2>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-gray-700 text-sm mb-1">Service Name</label>
-                    <input
-                      type="text"
-                      name="planName"
-                      value={editingSubscription.planName}
-                      onChange={handleEditChange}
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 text-sm mb-1">Domain</label>
-                    <input
-                      type="text"
-                      name="domain"
-                      value={editingSubscription.domain}
-                      onChange={handleEditChange}
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-gray-700 text-sm mb-1">Customer First Name</label>
-                      <input
-                        type="text"
-                        name="customerFirstName"
-                        value={editingSubscription.customerFirstName}
-                        onChange={handleEditChange}
-                        className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                      />
+            <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+              <div className="bg-indigo-900 text-white p-3 rounded-t-lg flex justify-between items-center">
+                <h2 className="text-xl font-bold">Edit Subscription</h2>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="text-white hover:text-gray-200 focus:outline-none"
+                >
+                  <FiX size={20} />
+                </button>
+              </div>
+              <form onSubmit={handleEditSubmit}>
+                <div className="p-6 space-y-6">
+                  {/* Subscription Info */}
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                      Subscription Information
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Service Name</label>
+                        <input
+                          type="text"
+                          value={editForm.planName}
+                          onChange={(e) => handleEditChange(e, 'planName')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Domain</label>
+                        <input
+                          type="text"
+                          value={editForm.domain}
+                          onChange={(e) => handleEditChange(e, 'domain')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Subscription Type</label>
+                        <select
+                          value={editForm.type}
+                          onChange={(e) => handleEditChange(e, 'type')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        >
+                          {subscriptionTypeOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Status</label>
+                        <select
+                          value={editForm.status}
+                          onChange={(e) => handleEditChange(e, 'status')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        >
+                          {statusOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-gray-700 text-sm mb-1">Customer Last Name</label>
-                      <input
-                        type="text"
-                        name="customerLastName"
-                        value={editingSubscription.customerLastName}
-                        onChange={handleEditChange}
-                        className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                      />
+                  </div>
+
+                  {/* Customer Info */}
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                      Customer Information
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">First Name</label>
+                        <input
+                          type="text"
+                          value={editForm.customer.firstName}
+                          onChange={(e) => handleEditChange(e, 'customer', 'firstName')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Last Name</label>
+                        <input
+                          type="text"
+                          value={editForm.customer.lastName}
+                          onChange={(e) => handleEditChange(e, 'customer', 'lastName')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Email</label>
+                        <input
+                          type="email"
+                          value={editForm.customer.email}
+                          onChange={(e) => handleEditChange(e, 'customer', 'email')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Phone (optional)</label>
+                        <input
+                          type="tel"
+                          value={editForm.customer.phone}
+                          onChange={(e) => handleEditChange(e, 'customer', 'phone')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-gray-700 text-sm mb-1">Email</label>
-                    <input
-                      type="email"
-                      name="primaryEmail"
-                      value={editingSubscription.primaryEmail}
-                      onChange={handleEditChange}
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                    />
+
+                  {/* Subscription Plan */}
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                      Subscription Plan
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Cost</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editForm.cost}
+                          onChange={(e) => handleEditChange(e, 'cost')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Currency</label>
+                        <select
+                          value={editForm.currency}
+                          onChange={(e) => handleEditChange(e, 'currency')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        >
+                          {currencyOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Billing Cycle</label>
+                        <select
+                          value={editForm.cycle}
+                          onChange={(e) => handleEditChange(e, 'cycle')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        >
+                          {billingCycleOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Payment Method (optional)</label>
+                        <select
+                          value={editForm.method}
+                          onChange={(e) => handleEditChange(e, 'method')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        >
+                          {paymentMethodOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-gray-700 text-sm mb-1">Phone</label>
-                    <input
-                      type="text"
-                      name="primaryPhone"
-                      value={editingSubscription.primaryPhone}
-                      onChange={handleEditChange}
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 text-sm mb-1">Cost</label>
-                    <input
-                      type="number"
-                      name="cost"
-                      value={editingSubscription.cost}
-                      onChange={handleEditChange}
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 text-sm mb-1">Type</label>
-                    <select
-                      name="type"
-                      value={editingSubscription.type}
-                      onChange={handleEditChange}
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                    >
-                      <option value="Monthly">Monthly</option>
-                      <option value="Annual">Annual</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 text-sm mb-1">Cycle</label>
-                    <select
-                      name="cycle"
-                      value={editingSubscription.cycle}
-                      onChange={handleEditChange}
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                    >
-                      <option value="Monthly">Monthly</option>
-                      <option value="Yearly">Yearly</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 text-sm mb-1">Next Due Date</label>
-                    <input
-                      type="date"
-                      name="nextDueDate"
-                      value={formatDateForInput(editingSubscription.nextDueDate)}
-                      onChange={handleEditChange}
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 text-sm mb-1">Payment Method</label>
-                    <select
-                      name="method"
-                      value={editingSubscription.method}
-                      onChange={handleEditChange}
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                    >
-                      <option value="Credit Card">Credit Card</option>
-                      <option value="PayPal">PayPal</option>
-                      <option value="Bank Transfer">Bank Transfer</option>
-                    </select>
+
+                  {/* Dates */}
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                      Subscription Dates
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Start Date</label>
+                        <input
+                          type="date"
+                          value={editForm.startDate}
+                          onChange={(e) => handleEditChange(e, 'startDate')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Next Due Date</label>
+                        <input
+                          type="date"
+                          value={editForm.nextDueDate}
+                          onChange={(e) => handleEditChange(e, 'nextDueDate')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div className="mt-4 grid grid-cols-2 gap-4">
+                <div className="p-3 rounded-b-lg flex justify-end space-x-2">
                   <button
+                    type="button"
                     onClick={() => setShowEditModal(false)}
-                    className="w-full py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-md focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-gray-500"
+                    className="py-2 px-4 bg-gray-200 text-gray-700 font-medium rounded-md text-xs hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
                   >
                     Cancel
                   </button>
                   <button
-                    onClick={handleEditSubmit}
-                    className="w-full py-2 bg-indigo-800 hover:bg-indigo-900 text-white text-sm font-medium rounded-md focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-indigo-500"
+                    type="submit"
+                    className="py-2 px-4 bg-indigo-900 text-white font-medium rounded-md text-xs hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
-                    Save
+                    Save Changes
                   </button>
                 </div>
-              </div>
+              </form>
             </div>
           </div>
         )}
@@ -865,7 +1097,7 @@ const Subscription = () => {
         {/* Loading and Error States */}
         {loading && (
           <div className="mt-8 text-center">
-            <div className="inline-flex items-center px-4 py-2 font-semibold leading-6 text-sm shadow rounded-md text-white bg-indigo-900 transition ease-in-out duration-150 cursor-not-allowed">
+            <div className="inline-flex items-center px-4 py-2 font-semibold leading-6 text-xs shadow rounded-md text-white bg-indigo-900 transition ease-in-out duration-150 cursor-not-allowed">
               <svg
                 className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
                 xmlns="http://www.w3.org/2000/svg"

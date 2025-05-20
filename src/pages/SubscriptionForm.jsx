@@ -26,6 +26,8 @@ const SubscriptionForm = ({ initialData, onCancel }) => {
     amount: 0,
     currency: "USD",
     billingCycle: "",
+    domain: "",
+    paymentMethod: "",
   });
 
   const [packages, setPackages] = useState([]);
@@ -71,16 +73,28 @@ const SubscriptionForm = ({ initialData, onCancel }) => {
   useEffect(() => {
     if (initialData) {
       setFormData({
-        ...initialData,
+        subscriptionName: initialData.subscriptionName || "",
+        subscriptionType: initialData.subscriptionType || "",
+        customer: {
+          firstName: initialData.customer?.firstName || "",
+          lastName: initialData.customer?.lastName || "",
+          email: initialData.customer?.email || "",
+          phone: initialData.customer?.phone || "",
+        },
         dates: {
-          startDate: initialData.dates.startDate
+          startDate: initialData.dates?.startDate
             ? parseISO(initialData.dates.startDate)
             : new Date(),
-          expiryDate: initialData.dates.expiryDate
+          expiryDate: initialData.dates?.expiryDate
             ? parseISO(initialData.dates.expiryDate)
             : null,
         },
+        package: initialData.package || "",
+        amount: initialData.amount || 0,
         currency: initialData.currency || "USD",
+        billingCycle: initialData.billingCycle || "",
+        domain: initialData.domain || "",
+        paymentMethod: initialData.paymentMethod || "",
       });
     }
   }, [initialData]);
@@ -96,7 +110,6 @@ const SubscriptionForm = ({ initialData, onCancel }) => {
   }, [notification.show]);
 
   const validateName = (name) => {
-    // Optional: Add validation for subscription name (e.g., domain-like or simple string)
     const pattern = /^[a-zA-Z0-9-]{3,}$/;
     return pattern.test(name);
   };
@@ -222,14 +235,30 @@ const SubscriptionForm = ({ initialData, onCancel }) => {
       return;
     }
 
+    if (!formData.dates.expiryDate) {
+      showNotification("error", "Please select a package to set an expiry date");
+      return;
+    }
+
     const submissionData = {
-      ...formData,
+      subscriptionName: formData.subscriptionName,
+      subscriptionType: formData.subscriptionType,
+      customer: {
+        firstName: formData.customer.firstName,
+        lastName: formData.customer.lastName,
+        email: formData.customer.email,
+        phone: formData.customer.phone || "", // Optional
+      },
       dates: {
         startDate: format(formData.dates.startDate, "yyyy-MM-dd"),
-        expiryDate: formData.dates.expiryDate
-          ? format(formData.dates.expiryDate, "yyyy-MM-dd")
-          : "",
+        expiryDate: format(formData.dates.expiryDate, "yyyy-MM-dd"),
       },
+      package: formData.package,
+      amount: parseFloat(formData.amount),
+      currency: formData.currency,
+      billingCycle: formData.billingCycle,
+      domain: formData.domain || "", // Optional
+      paymentMethod: formData.paymentMethod || "", // Optional
     };
 
     try {
@@ -265,16 +294,18 @@ const SubscriptionForm = ({ initialData, onCancel }) => {
           amount: 0,
           currency: "USD",
           billingCycle: "",
+          domain: "",
+          paymentMethod: "",
         });
         navigate("/subscriptions");
       } else if (result.message === "Subscription already exists or is duplicated") {
         showNotification("error", "Subscription already exists!");
       } else {
-        showNotification("error", result.message || "Something went wrong");
+        showNotification("error", result.message || "Failed to add subscription");
       }
     } catch (error) {
       showNotification("error", "Network or server error");
-      console.error("Error:", error);
+      console.error("Error submitting subscription:", error);
     }
   };
 
@@ -338,6 +369,13 @@ const SubscriptionForm = ({ initialData, onCancel }) => {
     { value: "yearly", label: "Yearly" },
   ];
 
+  const paymentMethodOptions = [
+    { value: "", label: "Select payment method" },
+    { value: "Credit Card", label: "Credit Card" },
+    { value: "PayPal", label: "PayPal" },
+    { value: "Bank Transfer", label: "Bank Transfer" },
+  ];
+
   return (
     <div className="bg-white p-6 rounded-xl shadow-lg mx-auto text-xs max-w-4xl">
       {notification.show && (
@@ -377,6 +415,13 @@ const SubscriptionForm = ({ initialData, onCancel }) => {
               />
               {nameError && <p className="mt-1 text-xs text-red-500">{nameError}</p>}
             </div>
+            <Input
+              label="Domain (optional)"
+              name="domain"
+              value={formData.domain}
+              onChange={handleChange}
+              placeholder="e.g., example.com"
+            />
             <Select
               label="Subscription Type"
               name="subscriptionType"
@@ -418,12 +463,11 @@ const SubscriptionForm = ({ initialData, onCancel }) => {
               required
             />
             <Input
-              label="Phone"
+              label="Phone (optional)"
               name="customer.phone"
               type="tel"
               value={formData.customer.phone}
               onChange={handleChange}
-              required
             />
           </div>
         </div>
@@ -474,6 +518,14 @@ const SubscriptionForm = ({ initialData, onCancel }) => {
               options={billingCycleOptions}
               required
               placeholder="Select billing cycle"
+            />
+            <Select
+              label="Payment Method (optional)"
+              name="paymentMethod"
+              value={formData.paymentMethod}
+              onChange={handleChange}
+              options={paymentMethodOptions}
+              placeholder="Select payment method"
             />
           </div>
         </div>
