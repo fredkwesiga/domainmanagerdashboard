@@ -26,6 +26,8 @@ const Hosting = () => {
   const [dropdownOpen, setDropdownOpen] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+  const [formData, setFormData] = useState(null);
+  const [formErrors, setFormErrors] = useState({});
 
   // Fetch hosting data from API
   const fetchHosting = async () => {
@@ -221,6 +223,12 @@ const Hosting = () => {
       .padStart(2, '0')}/${date.getFullYear()}`;
   };
 
+  // Format date to YYYY-MM-DD for input fields
+  const formatDateForInput = (dateString) => {
+    const date = new Date(dateString);
+    return date.toISOString().split('T')[0];
+  };
+
   // Handle View action
   const handleView = (hosting) => {
     setSelectedHosting(hosting);
@@ -231,6 +239,28 @@ const Hosting = () => {
   // Handle Edit action
   const handleEdit = (hosting) => {
     setSelectedHosting(hosting);
+    setFormData({
+      id: hosting.id,
+      domainName: hosting.domainName,
+      hostingType: hosting.hostingType,
+      firstName: hosting.owner.firstName,
+      lastName: hosting.owner.lastName,
+      email1: hosting.contact.email1,
+      email2: hosting.contact.email2,
+      phone1: hosting.contact.phone1,
+      phone2: hosting.contact.phone2,
+      startDate: hosting.dates.startDate,
+      expiryDate: hosting.dates.expiryDate,
+      package: hosting.package,
+      amount: hosting.amount,
+      currency: hosting.currency,
+      invoiceStatus: hosting.invoiceStatus,
+      ipAddress: hosting.serverDetails.ipAddress,
+      nameserver1: hosting.serverDetails.nameservers[0],
+      nameserver2: hosting.serverDetails.nameservers[1],
+      diskSpace: hosting.serverDetails.diskSpace,
+      bandwidth: hosting.serverDetails.bandwidth
+    });
     setEditModalOpen(true);
     setDropdownOpen(null);
   };
@@ -240,6 +270,153 @@ const Hosting = () => {
     setSelectedHosting(hosting);
     setDeleteModalOpen(true);
     setDropdownOpen(null);
+  };
+
+  // Handle Confirm Delete
+  const handleConfirmDelete = async () => {
+    if (!selectedHosting) return;
+    setIsDeleting(true);
+    try {
+      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/deletehosting.php', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id: selectedHosting.id })
+      });
+      const data = await response.json();
+      if (data.status === 'success') {
+        await fetchHosting();
+        setDeleteModalOpen(false);
+        setSelectedHosting(null);
+        toast.success('Hosting deleted successfully!', {
+          position: 'top-right',
+          autoClose: 2000,
+        });
+      } else {
+        setError(data.message || 'Failed to delete hosting');
+        toast.error(data.message || 'Failed to delete hosting', {
+          position: 'top-right',
+          autoClose: 2000,
+        });
+      }
+    } catch (err) {
+      setError('Network error occurred while deleting hosting');
+      toast.error('Network error occurred while deleting hosting', {
+        position: 'top-right',
+        autoClose: 2000,
+      });
+      console.error('Error deleting hosting:', err);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Handle form input changes
+  const handleEditChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    if (formErrors[name]) {
+      setFormErrors((prev) => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  // Validate form
+  const validateEditForm = () => {
+    const errors = {};
+    if (!formData.domainName.trim()) errors.domainName = 'Hosted Domain is required';
+    if (!formData.hostingType.trim()) errors.hostingType = 'Hosting Type is required';
+    if (!formData.firstName.trim()) errors.firstName = 'First Name is required';
+    if (!formData.lastName.trim()) errors.lastName = 'Last Name is required';
+    if (!formData.email1.trim()) {
+      errors.email1 = 'Primary Email is required';
+    } else if (!/\S+@\S+\.\S+/.test(formData.email1)) {
+      errors.email1 = 'Invalid email format';
+    }
+    if (!formData.startDate) errors.startDate = 'Start Date is required';
+    if (!formData.expiryDate) errors.expiryDate = 'Expiry Date is required';
+    if (!formData.package.trim()) errors.package = 'Package is required';
+    if (!formData.amount || formData.amount <= 0) errors.amount = 'Valid Amount is required';
+    if (!formData.currency.trim()) errors.currency = 'Currency is required';
+    return errors;
+  };
+
+  // Handle form submission for updating hosting
+  const handleUpdateHosting = async (e) => {
+    e.preventDefault();
+    const errors = validateEditForm();
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      toast.error('Please fix form errors before submitting', {
+        position: 'top-right',
+        autoClose: 2000,
+      });
+      return;
+    }
+
+    const submissionData = {
+      id: formData.id,
+      domainName: formData.domainName,
+      hostingType: formData.hostingType,
+      owner: {
+        firstName: formData.firstName,
+        lastName: formData.lastName
+      },
+      contact: {
+        email1: formData.email1,
+        email2: formData.email2 || '',
+        phone1: formData.phone1 || '',
+        phone2: formData.phone2 || ''
+      },
+      dates: {
+        startDate: formData.startDate,
+        expiryDate: formData.expiryDate
+      },
+      package: formData.package,
+      amount: formData.amount,
+      currency: formData.currency,
+      invoiceStatus: formData.invoiceStatus || 'Pending',
+      serverDetails: {
+        ipAddress: formData.ipAddress || '',
+        nameservers: [formData.nameserver1 || '', formData.nameserver2 || ''],
+        diskSpace: formData.diskSpace || '',
+        bandwidth: formData.bandwidth || ''
+      }
+    };
+
+    try {
+      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/updatehosting.php', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(submissionData)
+      });
+      const data = await response.json();
+      if (data.status === 'success') {
+        await fetchHosting();
+        setEditModalOpen(false);
+        setFormData(null);
+        setFormErrors({});
+        toast.success('Hosting updated successfully!', {
+          position: 'top-right',
+          autoClose: 2000,
+        });
+      } else {
+        setError(data.message || 'Failed to update hosting');
+        toast.error(data.message || 'Failed to update hosting', {
+          position: 'top-right',
+          autoClose: 2000,
+        });
+      }
+    } catch (err) {
+      setError('Network error occurred while updating hosting');
+      toast.error('Network error occurred while updating hosting', {
+        position: 'top-right',
+        autoClose: 2000,
+      });
+      console.error('Error updating hosting:', err);
+    }
   };
 
   return (
@@ -340,7 +517,7 @@ const Hosting = () => {
                   `px-4 py-3 text-sm font-medium focus:outline-none ${
                     selected
                       ? 'border-b-2 border-indigo-500 text-indigo-600'
-                     : 'text-gray-500 hover:text-gray-700ivad'
+                      : 'text-gray-500 hover:text-gray-700'
                   }`
                 }
               >
@@ -441,18 +618,17 @@ const Hosting = () => {
                                           <FiEye className="mr-2" size={16} />
                                           View Status
                                         </button>
-                                        {/* Edit and Delete disabled until implemented */}
                                         <button
-                                          disabled
-                                          className="flex items-center px-4 py-2 text-sm text-gray-400 cursor-not-allowed w-full text-left"
+                                          onClick={() => handleEdit(item)}
+                                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
                                           role="menuitem"
                                         >
                                           <FiEdit className="mr-2" size={16} />
                                           Edit
                                         </button>
                                         <button
-                                          disabled
-                                          className="flex items-center px-4 py-2 text-sm text-gray-400 cursor-not-allowed w-full text-left"
+                                          onClick={() => handleDelete(item)}
+                                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
                                           role="menuitem"
                                         >
                                           <FiTrash className="mr-2" size={16} />
@@ -556,6 +732,326 @@ const Hosting = () => {
                   className="w-full py-2 bg-indigo-800 text-white font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-sm"
                 >
                   Close Overview
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Modal */}
+        {editModalOpen && formData && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl max-h-[80vh] overflow-y-auto p-3">
+              <h2 className="text-xl font-bold mb-4">Edit Hosting</h2>
+              <form onSubmit={handleUpdateHosting} className="space-y-2">
+                <div>
+                  <label className="block text-gray-700 text-sm mb-1">Hosted Domain</label>
+                  <input
+                    type="text"
+                    name="domainName"
+                    value={formData.domainName}
+                    onChange={handleEditChange}
+                    required
+                    placeholder="e.g., example.com"
+                    className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                  {formErrors.domainName && (
+                    <p className="mt-1 text-xs text-red-500">{formErrors.domainName}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-gray-700 text-sm mb-1">Hosting Type</label>
+                  <input
+                    type="text"
+                    name="hostingType"
+                    value={formData.hostingType}
+                    onChange={handleEditChange}
+                    required
+                    placeholder="e.g., Shared"
+                    className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                  {formErrors.hostingType && (
+                    <p className="mt-1 text-xs text-red-500">{formErrors.hostingType}</p>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-gray-700 text-sm mb-1">First Name</label>
+                    <input
+                      type="text"
+                      name="firstName"
+                      value={formData.firstName}
+                      onChange={handleEditChange}
+                      required
+                      placeholder="e.g., John"
+                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    {formErrors.firstName && (
+                      <p className="mt-1 text-xs text-red-500">{formErrors.firstName}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 text-sm mb-1">Last Name</label>
+                    <input
+                      type="text"
+                      name="lastName"
+                      value={formData.lastName}
+                      onChange={handleEditChange}
+                      required
+                      placeholder="e.g., Doe"
+                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    {formErrors.lastName && (
+                      <p className="mt-1 text-xs text-red-500">{formErrors.lastName}</p>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-gray-700 text-sm mb-1">Primary Email</label>
+                  <input
+                    type="email"
+                    name="email1"
+                    value={formData.email1}
+                    onChange={handleEditChange}
+                    required
+                    placeholder="e.g., john.doe@example.com"
+                    className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                  {formErrors.email1 && (
+                    <p className="mt-1 text-xs text-red-500">{formErrors.email1}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-gray-700 text-sm mb-1">Backup Email (Optional)</label>
+                  <input
+                    type="email"
+                    name="email2"
+                    value={formData.email2}
+                    onChange={handleEditChange}
+                    placeholder="e.g., backup@example.com"
+                    className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-gray-700 text-sm mb-1">Primary Phone</label>
+                    <input
+                      type="tel"
+                      name="phone1"
+                      value={formData.phone1}
+                      onChange={handleEditChange}
+                      placeholder="e.g., +1234567890"
+                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 text-sm mb-1">Backup Phone (Optional)</label>
+                    <input
+                      type="tel"
+                      name="phone2"
+                      value={formData.phone2}
+                      onChange={handleEditChange}
+                      placeholder="e.g., +1234567891"
+                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-gray-700 text-sm mb-1">Start Date</label>
+                    <input
+                      type="date"
+                      name="startDate"
+                      value={formatDateForInput(formData.startDate)}
+                      onChange={handleEditChange}
+                      required
+                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    {formErrors.startDate && (
+                      <p className="mt-1 text-xs text-red-500">{formErrors.startDate}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 text-sm mb-1">Expiry Date</label>
+                    <input
+                      type="date"
+                      name="expiryDate"
+                      value={formatDateForInput(formData.expiryDate)}
+                      onChange={handleEditChange}
+                      required
+                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    {formErrors.expiryDate && (
+                      <p className="mt-1 text-xs text-red-500">{formErrors.expiryDate}</p>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-gray-700 text-sm mb-1">Package</label>
+                  <input
+                    type="text"
+                    name="package"
+                    value={formData.package}
+                    onChange={handleEditChange}
+                    required
+                    placeholder="e.g., Basic"
+                    className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                  {formErrors.package && (
+                    <p className="mt-1 text-xs text-red-500">{formErrors.package}</p>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-gray-700 text-sm mb-1">Amount</label>
+                    <input
+                      type="number"
+                      name="amount"
+                      value={formData.amount}
+                      onChange={handleEditChange}
+                      required
+                      placeholder="e.g., 100"
+                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    {formErrors.amount && (
+                      <p className="mt-1 text-xs text-red-500">{formErrors.amount}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 text-sm mb-1">Currency</label>
+                    <input
+                      type="text"
+                      name="currency"
+                      value={formData.currency}
+                      onChange={handleEditChange}
+                      required
+                      placeholder="e.g., USD"
+                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    {formErrors.currency && (
+                      <p className="mt-1 text-xs text-red-500">{formErrors.currency}</p>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-gray-700 text-sm mb-1">Invoice Status</label>
+                  <input
+                    type="text"
+                    name="invoiceStatus"
+                    value={formData.invoiceStatus}
+                    onChange={handleEditChange}
+                    placeholder="e.g., Pending"
+                    className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-700 text-sm mb-1">IP Address (Optional)</label>
+                  <input
+                    type="text"
+                    name="ipAddress"
+                    value={formData.ipAddress}
+                    onChange={handleEditChange}
+                    placeholder="e.g., 192.168.1.1"
+                    className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-gray-700 text-sm mb-1">Nameserver 1 (Optional)</label>
+                    <input
+                      type="text"
+                      name="nameserver1"
+                      value={formData.nameserver1}
+                      onChange={handleEditChange}
+                      placeholder="e.g., ns1.example.com"
+                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 text-sm mb-1">Nameserver 2 (Optional)</label>
+                    <input
+                      type="text"
+                      name="nameserver2"
+                      value={formData.nameserver2}
+                      onChange={handleEditChange}
+                      placeholder="e.g., ns2.example.com"
+                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-gray-700 text-sm mb-1">Disk Space (Optional)</label>
+                  <input
+                    type="text"
+                    name="diskSpace"
+                    value={formData.diskSpace}
+                    onChange={handleEditChange}
+                    placeholder="e.g., 10GB"
+                    className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-700 text-sm mb-1">Bandwidth (Optional)</label>
+                  <input
+                    type="text"
+                    name="bandwidth"
+                    value={formData.bandwidth}
+                    onChange={handleEditChange}
+                    placeholder="e.g., 100GB"
+                    className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditModalOpen(false);
+                      setFormData(null);
+                      setFormErrors({});
+                    }}
+                    className="w-full py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-md focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-gray-500"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="w-full py-2 bg-indigo-800 hover:bg-indigo-900 text-white text-sm font-medium rounded-md focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-indigo-500"
+                    disabled={Object.keys(formErrors).length > 0}
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {deleteModalOpen && selectedHosting && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Confirm Deletion</h2>
+              <p className="text-sm text-gray-600 mb-6">
+                Are you sure you want to delete the hosting for{' '}
+                <span className="font-medium">{selectedHosting.domainName}</span>? This action cannot be undone.
+              </p>
+              <div className="flex justify-end space-x-4">
+                <button
+                  onClick={() => {
+                    setDeleteModalOpen(false);
+                    setSelectedHosting(null);
+                  }}
+                  className="px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmDelete}
+                  className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? 'Deleting...' : 'Delete'}
                 </button>
               </div>
             </div>
