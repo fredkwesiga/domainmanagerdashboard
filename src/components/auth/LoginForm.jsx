@@ -26,34 +26,23 @@ const LoginForm = () => {
       const result = await response.json();
 
       if (result.status === 'success') {
-        // Debug: Log the API response to check the name field
-        console.log('API Response:', result);
+        console.log('LoginForm: API Response:', result);
+        console.log('LoginForm: Permissions from backend:', result.permissions);
 
-        // Store authentication status, role, email, name, and token
         localStorage.setItem('isAuthenticated', 'true');
         localStorage.setItem('userRole', result.role);
         localStorage.setItem('userEmail', email);
         localStorage.setItem('userName', result.name || 'User');
         localStorage.setItem('token', result.token);
+        localStorage.setItem('userPermissions', JSON.stringify(result.permissions));
 
-        // Store permissions from the API response
-        const permissions = result.permissions || {
-          dashboard: false,
-          domains: false,
-          hosting: false,
-          subscriptions: false,
-          birthdays: false,
-        };
-        localStorage.setItem('userPermissions', JSON.stringify(permissions));
-        console.log('LoginForm: Setting userPermissions=', permissions);
-
-        // Navigate to dashboard or home
         navigate('/');
       } else {
         throw new Error(result.message || 'Login failed');
       }
     } catch (err) {
       setError(err.message || 'An error occurred. Please try again.');
+      console.error('LoginForm: Error during login:', err);
     } finally {
       setLoading(false);
     }

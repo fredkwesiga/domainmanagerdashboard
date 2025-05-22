@@ -1,37 +1,122 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FiUser, FiCheck, FiX, FiSave, FiXCircle } from 'react-icons/fi';
-
-const initialUsers = [
-  { id: '1', email: 'admin1@tekjuice.co.uk', name: 'Admin One', permissions: { dashboard: true, domains: true, hosting: false, subscriptions: false, birthdays: false, expenseSync: false } },
-  { id: '2', email: 'admin2@tekjuice.co.uk', name: 'Admin Two', permissions: { dashboard: true, domains: false, hosting: true, subscriptions: false, birthdays: false, expenseSync: false } },
-];
+import { useUser } from '../context/UserContext';
+import { Navigate } from 'react-router-dom';
 
 const UserManagement = () => {
-  const [users, setUsers] = useState(initialUsers);
+  const { userPermissions, updatePermissions } = useUser();
+  const userRole = localStorage.getItem('userRole') || 'admin';
+
+  if (userRole !== 'superadmin') {
+    console.log('UserManagement: Redirecting to / - User is not superadmin');
+    return <Navigate to="/" replace />;
+  }
+
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [newUser, setNewUser] = useState({
     email: '',
     name: '',
     password: '',
-    permissions: { dashboard: true, domains: false, hosting: false, subscriptions: false, birthdays: false, expenseSync: false },
+    permissions: {
+      dashboard: true,
+      domains: false,
+      hosting: false,
+      subscriptions: false,
+      birthdays: false,
+      expenseSync: false,
+      settings: false,
+    },
   });
   const [editingUserId, setEditingUserId] = useState(null);
   const [editFormData, setEditFormData] = useState({});
   const [editErrors, setEditErrors] = useState({});
 
-  const togglePermission = (userId, permission) => {
-    setUsers(users.map(user => {
-      if (user.id === userId) {
-        return {
-          ...user,
-          permissions: {
-            ...user.permissions,
-            [permission]: !user.permissions[permission],
+  useEffect(() => {
+    const fetchUsers = async () => {
+      setLoading(true);
+      setError('');
+
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/manage_users.php', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
           },
-        };
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+          setUsers(result.users);
+          console.log('UserManagement: Fetched users:', result.users);
+        } else {
+          throw new Error(result.message || 'Failed to fetch users');
+        }
+      } catch (err) {
+        setError(err.message || 'An error occurred while fetching users');
+        console.error('UserManagement: Error fetching users:', err);
+      } finally {
+        setLoading(false);
       }
-      return user;
-    }));
+    };
+
+    fetchUsers();
+  }, []);
+
+  const togglePermission = async (userId, permission) => {
+    const user = users.find((u) => u.id === userId);
+    const updatedPermissions = {
+      ...user.permissions,
+      [permission]: !user.permissions[permission],
+    };
+
+    // Optimistically update the UI
+    setUsers(
+      users.map((u) =>
+        u.id === userId ? { ...u, permissions: updatedPermissions } : u
+      )
+    );
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/manage_users.php', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          id: userId,
+          permissions: updatedPermissions,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.status !== 'success') {
+        throw new Error(result.message || 'Failed to update permissions');
+      }
+
+      const loggedInEmail = localStorage.getItem('userEmail');
+      if (user.email === loggedInEmail) {
+        console.log('UserManagement: Updating logged-in user permissions:', updatedPermissions);
+        updatePermissions(updatedPermissions); // Update UserContext
+      }
+    } catch (err) {
+      setError(err.message || 'An error occurred while updating permissions');
+      console.error('UserManagement: Error updating permissions:', err);
+      // Revert UI on error
+      setUsers(
+        users.map((u) =>
+          u.id === userId ? { ...u, permissions: user.permissions } : u
+        )
+      );
+    }
   };
 
   const handleNewUserChange = (e) => {
@@ -49,17 +134,48 @@ const UserManagement = () => {
     });
   };
 
-  const handleAddUser = (e) => {
+  const handleAddUser = async (e) => {
     e.preventDefault();
-    const newId = (users.length + 1).toString();
-    setUsers([...users, { ...newUser, id: newId }]);
-    setShowAddForm(false);
-    setNewUser({
-      email: '',
-      name: '',
-      password: '',
-      permissions: { dashboard: true, domains: false, hosting: false, subscriptions: false, birthdays: false, expenseSync: false },
-    });
+    setError('');
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/manage_users.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(newUser),
+      });
+
+      const result = await response.json();
+
+      if (result.status === 'success') {
+        setUsers([...users, result.user]);
+        setShowAddForm(false);
+        setNewUser({
+          email: '',
+          name: '',
+          password: '',
+          permissions: {
+            dashboard: true,
+            domains: false,
+            hosting: false,
+            subscriptions: false,
+            birthdays: false,
+            expenseSync: false,
+            settings: false,
+          },
+        });
+        console.log('UserManagement: Added new user:', result.user);
+      } else {
+        throw new Error(result.message || 'Failed to add admin');
+      }
+    } catch (err) {
+      setError(err.message || 'An error occurred while adding the admin');
+      console.error('UserManagement: Error adding user:', err);
+    }
   };
 
   const startEditing = (user) => {
@@ -70,6 +186,7 @@ const UserManagement = () => {
       permissions: { ...user.permissions },
     });
     setEditErrors({});
+    console.log('UserManagement: Started editing user:', user);
   };
 
   const handleEditChange = (e) => {
@@ -101,42 +218,69 @@ const UserManagement = () => {
     return errors;
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     const errors = validateEditForm();
     if (Object.keys(errors).length > 0) {
       setEditErrors(errors);
       return;
     }
 
-    setUsers(users.map(user => {
-      if (user.id === editingUserId) {
-        return {
-          ...user,
-          name: editFormData.name,
-          email: editFormData.email,
-          permissions: { ...editFormData.permissions },
-        };
-      }
-      return user;
-    }));
-
-    // Log for future API integration
-    console.log('API PATCH /users/:id payload:', {
+    const updatedUser = {
       id: editingUserId,
       name: editFormData.name,
       email: editFormData.email,
       permissions: editFormData.permissions,
-    });
+    };
 
-    setEditingUserId(null);
-    setEditFormData({});
-    setEditErrors({});
+    // Optimistically update the UI
+    setUsers(
+      users.map((user) => (user.id === editingUserId ? { ...user, ...updatedUser } : user))
+    );
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/manage_users.php', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(updatedUser),
+      });
+
+      const result = await response.json();
+
+      if (result.status !== 'success') {
+        throw new Error(result.message || 'Failed to update admin');
+      }
+
+      const loggedInEmail = localStorage.getItem('userEmail');
+      if (updatedUser.email === loggedInEmail) {
+        console.log('UserManagement: Updating logged-in user permissions:', updatedUser.permissions);
+        updatePermissions(updatedUser.permissions); // Update UserContext
+      }
+
+      setEditingUserId(null);
+      setEditFormData({});
+      setEditErrors({});
+      console.log('UserManagement: Successfully updated user:', updatedUser);
+    } catch (err) {
+      setError(err.message || 'An error occurred while updating the admin');
+      console.error('UserManagement: Error updating user:', err);
+      // Revert UI on error
+      setUsers(
+        users.map((user) =>
+          user.id === editingUserId ? users.find((u) => u.id === editingUserId) : user
+        )
+      );
+    }
   };
 
   const cancelEdit = () => {
     setEditingUserId(null);
     setEditFormData({});
     setEditErrors({});
+    console.log('UserManagement: Cancelled editing');
   };
 
   return (
@@ -151,6 +295,10 @@ const UserManagement = () => {
             + Add New Admin
           </button>
         </div>
+
+        {error && (
+          <div className="mb-4 p-3 text-sm text-red-700 bg-red-50 rounded-lg">{error}</div>
+        )}
 
         {showAddForm && (
           <div className="bg-white shadow rounded-lg p-6 mb-6">
@@ -192,60 +340,19 @@ const UserManagement = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Permissions</label>
                 <div className="space-y-2">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={newUser.permissions.dashboard}
-                      onChange={() => handleNewUserPermission('dashboard')}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">Dashboard Access</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={newUser.permissions.domains}
-                      onChange={() => handleNewUserPermission('domains')}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">Domains Access</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={newUser.permissions.hosting}
-                      onChange={() => handleNewUserPermission('hosting')}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">Hosting Access</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={newUser.permissions.subscriptions}
-                      onChange={() => handleNewUserPermission('subscriptions')}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">Subscriptions Access</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={newUser.permissions.birthdays}
-                      onChange={() => handleNewUserPermission('birthdays')}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">Birthdays Access</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={newUser.permissions.expenseSync}
-                      onChange={() => handleNewUserPermission('expenseSync')}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">ExpenseSync Access</span>
-                  </label>
+                  {Object.keys(newUser.permissions).map((permission) => (
+                    <label key={permission} className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={newUser.permissions[permission]}
+                        onChange={() => handleNewUserPermission(permission)}
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      />
+                      <span className="ml-2 text-sm text-gray-700">
+                        {permission.charAt(0).toUpperCase() + permission.slice(1)} Access
+                      </span>
+                    </label>
+                  ))}
                 </div>
               </div>
               <div className="flex space-x-3">
@@ -267,250 +374,145 @@ const UserManagement = () => {
           </div>
         )}
 
-        <div className="bg-white shadow rounded-lg overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Admin User
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Email
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Dashboard Access
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Domains Access
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Hosting Access
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Subscriptions Access
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Birthdays Access
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    ExpenseSync Access
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {users.map((user) => (
-                  <tr key={user.id}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {editingUserId === user.id ? (
-                        <div className="flex items-center">
-                          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-medium">
-                            <FiUser size={16} />
-                          </div>
-                          <div className="ml-4 w-40">
-                            <input
-                              type="text"
-                              name="name"
-                              value={editFormData.name}
-                              onChange={handleEditChange}
-                              className={`w-full px-2 py-1 border ${editErrors.name ? 'border-red-500' : 'border-gray-300'} rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500`}
-                            />
-                            {editErrors.name && (
-                              <p className="mt-1 text-xs text-red-600">{editErrors.name}</p>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-center">
-                          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-medium">
-                            <FiUser size={16} />
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">
-                              {user.name}
+        {loading ? (
+          <div className="text-center py-6">
+            <p className="text-gray-600">Loading...</p>
+          </div>
+        ) : (
+          <div className="bg-white shadow rounded-lg overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Admin User
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Email
+                    </th>
+                    {Object.keys(newUser.permissions).map((permission) => (
+                      <th
+                        key={permission}
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
+                        {permission.charAt(0).toUpperCase() + permission.slice(1)} Access
+                      </th>
+                    ))}
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {users.map((user) => (
+                    <tr key={user.id}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {editingUserId === user.id ? (
+                          <div className="flex items-center">
+                            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-medium">
+                              <FiUser size={16} />
+                            </div>
+                            <div className="ml-4 w-40">
+                              <input
+                                type="text"
+                                name="name"
+                                value={editFormData.name}
+                                onChange={handleEditChange}
+                                className={`w-full px-2 py-1 border ${
+                                  editErrors.name ? 'border-red-500' : 'border-gray-300'
+                                } rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500`}
+                              />
+                              {editErrors.name && (
+                                <p className="mt-1 text-xs text-red-600">{editErrors.name}</p>
+                              )}
                             </div>
                           </div>
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {editingUserId === user.id ? (
-                        <div className="w-64">
-                          <input
-                            type="email"
-                            name="email"
-                            value={editFormData.email}
-                            onChange={handleEditChange}
-                            className={`w-full px-2 py-1 border ${editErrors.email ? 'border-red-500' : 'border-gray-300'} rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500`}
-                          />
-                          {editErrors.email && (
-                            <p className="mt-1 text-xs text-red-600">{editErrors.email}</p>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-sm text-gray-500">{user.email}</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {editingUserId === user.id ? (
-                        <input
-                          type="checkbox"
-                          checked={editFormData.permissions.dashboard}
-                          onChange={() => handleEditPermission('dashboard')}
-                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                        />
-                      ) : (
-                        <button
-                          onClick={() => togglePermission(user.id, 'dashboard')}
-                          className="focus:outline-none"
-                        >
-                          {user.permissions.dashboard ? (
-                            <FiCheck className="text-green-500" size={20} />
+                        ) : (
+                          <div className="flex items-center">
+                            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-medium">
+                              <FiUser size={16} />
+                            </div>
+                            <div className="ml-4">
+                              <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                            </div>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {editingUserId === user.id ? (
+                          <div className="w-64">
+                            <input
+                              type="email"
+                              name="email"
+                              value={editFormData.email}
+                              onChange={handleEditChange}
+                              className={`w-full px-2 py-1 border ${
+                                editErrors.email ? 'border-red-500' : 'border-gray-300'
+                              } rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500`}
+                            />
+                            {editErrors.email && (
+                              <p className="mt-1 text-xs text-red-600">{editErrors.email}</p>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-500">{user.email}</span>
+                        )}
+                      </td>
+                      {Object.keys(newUser.permissions).map((permission) => (
+                        <td key={permission} className="px-6 py-4 whitespace-nowrap">
+                          {editingUserId === user.id ? (
+                            <input
+                              type="checkbox"
+                              checked={editFormData.permissions[permission]}
+                              onChange={() => handleEditPermission(permission)}
+                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                            />
                           ) : (
-                            <FiX className="text-red-500" size={20} />
+                            <button
+                              onClick={() => togglePermission(user.id, permission)}
+                              className="focus:outline-none"
+                            >
+                              {user.permissions[permission] ? (
+                                <FiCheck className="text-green-500" size={20} />
+                              ) : (
+                                <FiX className="text-red-500" size={20} />
+                              )}
+                            </button>
                           )}
-                        </button>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {editingUserId === user.id ? (
-                        <input
-                          type="checkbox"
-                          checked={editFormData.permissions.domains}
-                          onChange={() => handleEditPermission('domains')}
-                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                        />
-                      ) : (
-                        <button
-                          onClick={() => togglePermission(user.id, 'domains')}
-                          className="focus:outline-none"
-                        >
-                          {user.permissions.domains ? (
-                            <FiCheck className="text-green-500" size={20} />
-                          ) : (
-                            <FiX className="text-red-500" size={20} />
-                          )}
-                        </button>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {editingUserId === user.id ? (
-                        <input
-                          type="checkbox"
-                          checked={editFormData.permissions.hosting}
-                          onChange={() => handleEditPermission('hosting')}
-                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                        />
-                      ) : (
-                        <button
-                          onClick={() => togglePermission(user.id, 'hosting')}
-                          className="focus:outline-none"
-                        >
-                          {user.permissions.hosting ? (
-                            <FiCheck className="text-green-500" size={20} />
-                          ) : (
-                            <FiX className="text-red-500" size={20} />
-                          )}
-                        </button>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {editingUserId === user.id ? (
-                        <input
-                          type="checkbox"
-                          checked={editFormData.permissions.subscriptions}
-                          onChange={() => handleEditPermission('subscriptions')}
-                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                        />
-                      ) : (
-                        <button
-                          onClick={() => togglePermission(user.id, 'subscriptions')}
-                          className="focus:outline-none"
-                        >
-                          {user.permissions.subscriptions ? (
-                            <FiCheck className="text-green-500" size={20} />
-                          ) : (
-                            <FiX className="text-red-500" size={20} />
-                          )}
-                        </button>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {editingUserId === user.id ? (
-                        <input
-                          type="checkbox"
-                          checked={editFormData.permissions.birthdays}
-                          onChange={() => handleEditPermission('birthdays')}
-                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                        />
-                      ) : (
-                        <button
-                          onClick={() => togglePermission(user.id, 'birthdays')}
-                          className="focus:outline-none"
-                        >
-                          {user.permissions.birthdays ? (
-                            <FiCheck className="text-green-500" size={20} />
-                          ) : (
-                            <FiX className="text-red-500" size={20} />
-                          )}
-                        </button>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {editingUserId === user.id ? (
-                        <input
-                          type="checkbox"
-                          checked={editFormData.permissions.expenseSync}
-                          onChange={() => handleEditPermission('expenseSync')}
-                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                        />
-                      ) : (
-                        <button
-                          onClick={() => togglePermission(user.id, 'expenseSync')}
-                          className="focus:outline-none"
-                        >
-                          {user.permissions.expenseSync ? (
-                            <FiCheck className="text-green-500" size={20} />
-                          ) : (
-                            <FiX className="text-red-500" size={20} />
-                          )}
-                        </button>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      {editingUserId === user.id ? (
-                        <div className="flex space-x-2">
+                        </td>
+                      ))}
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        {editingUserId === user.id ? (
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={saveEdit}
+                              className="text-green-600 hover:text-green-800"
+                              title="Save"
+                            >
+                              <FiSave size={16} />
+                            </button>
+                            <button
+                              onClick={cancelEdit}
+                              className="text-red-600 hover:text-red-800"
+                              title="Cancel"
+                            >
+                              <FiXCircle size={16} />
+                            </button>
+                          </div>
+                        ) : (
                           <button
-                            onClick={saveEdit}
-                            className="text-green-600 hover:text-green-800"
-                            title="Save"
+                            onClick={() => startEditing(user)}
+                            className="text-gray-400 hover:text-gray-600"
                           >
-                            <FiSave size={16} />
+                            Edit
                           </button>
-                          <button
-                            onClick={cancelEdit}
-                            className="text-red-600 hover:text-red-800"
-                            title="Cancel"
-                          >
-                            <FiXCircle size={16} />
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => startEditing(user)}
-                          className="text-gray-400 hover:text-gray-600"
-                        >
-                          Edit
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

@@ -1,5 +1,7 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { UserProvider, useUser } from './context/UserContext'; // Import useUser
+import { NotificationProvider } from './components/layout/NotificationContext';
 import MainLayout from './components/layout/MainLayout';
 import Dashboard from './pages/Dashboard';
 import DomainsPage from './pages/Domains';
@@ -20,18 +22,15 @@ import UserManagement from './pages/UserManagement';
 import HostingForm from './pages/HostingForm';
 import BirthdayForm from './pages/BirthdayForm';
 import Profile from './pages/Profile';
-import { NotificationProvider } from './components/layout/NotificationContext';
 
 // Simple auth check
 const isAuthenticated = () => {
   return localStorage.getItem('isAuthenticated') === 'true';
 };
 
-// Permission check
-const hasPermission = (requiredPermission) => {
-  const userRole = localStorage.getItem('userRole') || 'admin';
+// Permission check using UserContext
+const hasPermission = (requiredPermission, userPermissions, userRole) => {
   if (userRole === 'superadmin') return true; // Super admin has full access
-  const userPermissions = JSON.parse(localStorage.getItem('userPermissions')) || {};
   console.log(`hasPermission: Checking ${requiredPermission} for role=${userRole}, permissions=`, userPermissions);
   return userPermissions[requiredPermission] === true;
 };
@@ -63,13 +62,15 @@ class ErrorBoundary extends React.Component {
 
 // Protected route component
 const ProtectedRoute = ({ children, requiredPermission, superAdminOnly = false }) => {
+  const { userPermissions } = useUser(); // Use UserContext
+  const userRole = localStorage.getItem('userRole') || 'admin';
+  const userEmail = localStorage.getItem('userEmail') || 'unknown';
+
   if (!isAuthenticated()) {
     console.log('ProtectedRoute: Redirecting to /login - User not authenticated');
     return <Navigate to="/login" replace />;
   }
 
-  const userRole = localStorage.getItem('userRole') || 'admin';
-  const userEmail = localStorage.getItem('userEmail') || 'unknown';
   console.log(`ProtectedRoute: Checking access for user=${userEmail}, role=${userRole}, permission=${requiredPermission}, superAdminOnly=${superAdminOnly}`);
 
   if (superAdminOnly && userRole !== 'superadmin') {
@@ -77,7 +78,7 @@ const ProtectedRoute = ({ children, requiredPermission, superAdminOnly = false }
     return <Navigate to="/" replace />;
   }
 
-  if (requiredPermission && !hasPermission(requiredPermission)) {
+  if (requiredPermission && !hasPermission(requiredPermission, userPermissions, userRole)) {
     console.log(`ProtectedRoute: Redirecting to / - Missing permission: ${requiredPermission}`);
     return <Navigate to="/" replace />;
   }
@@ -88,11 +89,12 @@ const ProtectedRoute = ({ children, requiredPermission, superAdminOnly = false }
 // Wrapper to debug navigation
 const DebugNavigation = ({ children }) => {
   const location = useLocation();
+  const { userPermissions } = useUser(); // Use UserContext
 
   useEffect(() => {
     console.log('DebugNavigation: Current route:', location.pathname);
-    console.log('DebugNavigation: userPermissions=', JSON.parse(localStorage.getItem('userPermissions')));
-  }, [location]);
+    console.log('DebugNavigation: userPermissions=', userPermissions);
+  }, [location, userPermissions]);
 
   return children;
 };
@@ -102,160 +104,162 @@ const App = () => {
   console.log('App: userRole=', localStorage.getItem('userRole'));
   console.log('App: userEmail=', localStorage.getItem('userEmail'));
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        
-        <Route 
-          path="/" 
-          element={
-            <NotificationProvider>
-              <ProtectedRoute requiredPermission="dashboard">
-                <DebugNavigation>
-                  <ErrorBoundary>
-                    <MainLayout />
-                  </ErrorBoundary>
-                </DebugNavigation>
-              </ProtectedRoute>
-            </NotificationProvider>
-          }
-        >
-          <Route index element={<Dashboard />} />
-          <Route
-            path="domains"
-            element={
-              <ProtectedRoute requiredPermission="domains">
-                <DomainsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="packages"
-            element={
-              <ProtectedRoute requiredPermission="domains">
-                <PackagesPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="packages/add"
-            element={
-              <ProtectedRoute requiredPermission="domains">
-                <AddPackagePage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="domains/add"
-            element={
-              <ProtectedRoute requiredPermission="domains">
-                <AddDomainPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="expiring"
-            element={
-              <ProtectedRoute requiredPermission="domains">
-                <ExpiringDomainsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="expired"
-            element={
-              <ProtectedRoute requiredPermission="domains">
-                <ExpiredDomainsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="settings"
-            element={
-              <ProtectedRoute superAdminOnly={true} requiredPermission="settings">
-                <UserManagement />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="hosting"
-            element={
-              <ProtectedRoute requiredPermission="hosting">
-                <Hosting />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="subscriptions"
-            element={
-              <ProtectedRoute requiredPermission="subscriptions">
-                <Subscription />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="subscriptions/add"
-            element={
-              <ProtectedRoute requiredPermission="subscriptions">
-                <SubscriptionForm/>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="domain-and-hosting"
-            element={
-              <ProtectedRoute requiredPermission="domains">
-                <ProtectedRoute requiredPermission="hosting">
-                  <DomainAndHosting />
+    <UserProvider>
+      <NotificationProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            
+            <Route 
+              path="/" 
+              element={
+                <ProtectedRoute requiredPermission="dashboard">
+                  <DebugNavigation>
+                    <ErrorBoundary>
+                      <MainLayout />
+                    </ErrorBoundary>
+                  </DebugNavigation>
                 </ProtectedRoute>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="birthdays"
-            element={
-              <ProtectedRoute requiredPermission="birthdays">
-                <Birthdays />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="birthdays/add"
-            element={
-              <ProtectedRoute requiredPermission="birthdays">
-                <BirthdayForm />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="birthdays/edit/:id"
-            element={
-              <ProtectedRoute requiredPermission="birthdays">
-                <BirthdayForm />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/hosting/add"
-            element={
-              <ProtectedRoute requiredPermission="hosting">
-                <HostingForm />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="profile"
-            element={
-              <ProtectedRoute>
-                <Profile />
-              </ProtectedRoute>
-            }
-          />
-        </Route>
-        
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
-    </BrowserRouter>
+              }
+            >
+              <Route index element={<Dashboard />} />
+              <Route
+                path="domains"
+                element={
+                  <ProtectedRoute requiredPermission="domains">
+                    <DomainsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="packages"
+                element={
+                  <ProtectedRoute requiredPermission="domains">
+                    <PackagesPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="packages/add"
+                element={
+                  <ProtectedRoute requiredPermission="domains">
+                    <AddPackagePage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="domains/add"
+                element={
+                  <ProtectedRoute requiredPermission="domains">
+                    <AddDomainPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="expiring"
+                element={
+                  <ProtectedRoute requiredPermission="domains">
+                    <ExpiringDomainsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="expired"
+                element={
+                  <ProtectedRoute requiredPermission="domains">
+                    <ExpiredDomainsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="settings"
+                element={
+                  <ProtectedRoute superAdminOnly={true} requiredPermission="settings">
+                    <UserManagement />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="hosting"
+                element={
+                  <ProtectedRoute requiredPermission="hosting">
+                    <Hosting />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="subscriptions"
+                element={
+                  <ProtectedRoute requiredPermission="subscriptions">
+                    <Subscription />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="subscriptions/add"
+                element={
+                  <ProtectedRoute requiredPermission="subscriptions">
+                    <SubscriptionForm />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="domain-and-hosting"
+                element={
+                  <ProtectedRoute requiredPermission="domains">
+                    <ProtectedRoute requiredPermission="hosting">
+                      <DomainAndHosting />
+                    </ProtectedRoute>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="birthdays"
+                element={
+                  <ProtectedRoute requiredPermission="birthdays">
+                    <Birthdays />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="birthdays/add"
+                element={
+                  <ProtectedRoute requiredPermission="birthdays">
+                    <BirthdayForm />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="birthdays/edit/:id"
+                element={
+                  <ProtectedRoute requiredPermission="birthdays">
+                    <BirthdayForm />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="hosting/add"
+                element={
+                  <ProtectedRoute requiredPermission="hosting">
+                    <HostingForm />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="profile"
+                element={
+                  <ProtectedRoute>
+                    <Profile />
+                  </ProtectedRoute>
+                }
+              />
+            </Route>
+            
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </BrowserRouter>
+      </NotificationProvider>
+    </UserProvider>
   );
 };
 

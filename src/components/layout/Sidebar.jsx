@@ -1,29 +1,31 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { 
   FiMenu, 
   FiChevronLeft,
   FiHome,
   FiGlobe,
-  FiPlus,
   FiClock,
   FiAlertCircle,
   FiSettings,
   FiLogOut,
   FiBox,
-  FiUser,
   FiServer,
   FiCreditCard,
   FiPackage,
-  FiDollarSign,
   FiGift
 } from 'react-icons/fi';
+import { useUser } from '../../context/UserContext';
 
 const Sidebar = ({ isOpen, toggleSidebar }) => {
+  const { userPermissions } = useUser();
   const userRole = localStorage.getItem('userRole') || 'admin';
-  const userPermissions = JSON.parse(localStorage.getItem('userPermissions')) || {};
-  console.log('Sidebar: User permissions:', userPermissions);
-  
+
+  useEffect(() => {
+    console.log('Sidebar: Current userPermissions from UserContext:', userPermissions);
+    console.log('Sidebar: Current userRole:', userRole);
+  }, [userPermissions, userRole]);
+
   const handleToggle = () => {
     toggleSidebar(!isOpen, true);
   };
@@ -33,6 +35,8 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
     localStorage.removeItem('userRole');
     localStorage.removeItem('userEmail');
     localStorage.removeItem('userPermissions');
+    localStorage.removeItem('token');
+    localStorage.removeItem('userName');
     window.location.href = '/login';
   };
 
@@ -40,28 +44,40 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
     { icon: FiHome, label: 'Dashboard', to: '/', permission: 'dashboard' },
     { icon: FiBox, label: 'Packages', to: '/packages', permission: 'domains' },
     { icon: FiGlobe, label: 'All Domains', to: '/domains', permission: 'domains' },
-    // { icon: FiPlus, label: 'Add Domain', to: '/domains/add', permission: 'domains' },
     { icon: FiClock, label: 'Expiring Soon', to: '/expiring', permission: 'domains' },
     { icon: FiAlertCircle, label: 'Expired Domains', to: '/expired', permission: 'domains' },
     { icon: FiServer, label: 'Hosting', to: '/hosting', permission: 'hosting' },
-    // { icon: FiCreditCard, label: 'Subscription', to: '/subscriptions', permission: 'subscriptions' },
-    { icon: FiPackage, label: 'Domain & Hosting', to: '/domain-and-hosting', permission: 'domains' },
     { icon: FiCreditCard, label: 'Subscription', to: '/subscriptions', permission: 'subscriptions' },
-    { icon: FiGift, label: 'Birthdays', to: '/birthdays', permission: 'birthdays' }
+    {
+      icon: FiPackage,
+      label: 'Domain & Hosting',
+      to: '/domain-and-hosting',
+      permission: ['domains', 'hosting'], // Require both permissions
+    },
+    { icon: FiGift, label: 'Birthdays', to: '/birthdays', permission: 'birthdays' },
   ];
 
   const adminItems = [
-    { icon: FiSettings, label: 'Settings', to: '/settings', permission: 'settings' }
+    { icon: FiSettings, label: 'Settings', to: '/settings', permission: 'settings' },
   ];
 
-  // Filter menu items based on permissions
-  const filteredDomainMenuItems = domainMenuItems.filter(item => 
-    userRole === 'superadmin' || (item.permission && userPermissions[item.permission])
-  );
+  // Filter menu items based on permissions from UserContext
+  const filteredDomainMenuItems = domainMenuItems.filter(item => {
+    let hasAccess;
+    if (Array.isArray(item.permission)) {
+      hasAccess = userRole === 'superadmin' || item.permission.every(p => userPermissions[p] === true);
+    } else {
+      hasAccess = userRole === 'superadmin' || (item.permission && userPermissions[item.permission] === true);
+    }
+    console.log(`Sidebar: Checking menu item ${item.label}, permission=${JSON.stringify(item.permission)}, hasAccess=${hasAccess}`);
+    return hasAccess;
+  });
 
   const filteredAdminItems = adminItems.filter(item => 
-    userRole === 'superadmin' || (item.permission && userPermissions[item.permission])
+    userRole === 'superadmin' || (item.permission && userPermissions[item.permission] === true)
   );
+
+  console.log('Sidebar: Filtered domain menu items:', filteredDomainMenuItems.map(item => item.label));
 
   return (
     <aside 
@@ -112,6 +128,32 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             ))}
           </nav>
         </div>
+
+        {/* Admin Settings Section */}
+        {/* {filteredAdminItems.length > 0 && (
+          <div className="mb-6">
+            {isOpen && <h2 className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Admin</h2>}
+            <nav className="space-y-1 px-2">
+              {filteredAdminItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end
+                  className={({ isActive }) => 
+                    `flex items-center px-2 py-2 rounded-md ${
+                      isActive 
+                        ? 'bg-gray-800 text-white' 
+                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                    }`
+                  }
+                >
+                  <item.icon className={`flex-shrink-0 ${isOpen ? 'mr-3' : 'mx-auto'}`} size={20} />
+                  {isOpen && <span className="text-sm">{item.label}</span>}
+                </NavLink>
+              ))}
+            </nav>
+          </div>
+        )} */}
       </div>
 
       {/* Footer */}
