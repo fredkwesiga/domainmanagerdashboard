@@ -25,12 +25,15 @@ const MainLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [manuallyToggled, setManuallyToggled] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showUserMenu, setShowUserMenu] = useState(false); 
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const { notifications } = useNotifications();
   const location = useLocation();
 
+  // Retrieve user data from localStorage
   const userRole = localStorage.getItem('userRole') || 'admin';
+  const userName = localStorage.getItem('userName') || 'User'; // Fetch the user's name
+  const userEmail = localStorage.getItem('userEmail') || 'user@example.com'; // Fetch the user's email
 
   const getCurrentPageInfo = () => {
     const path = location.pathname;
@@ -63,6 +66,7 @@ const MainLayout = () => {
       localStorage.removeItem('isAuthenticated');
       localStorage.removeItem('userRole');
       localStorage.removeItem('userEmail');
+      localStorage.removeItem('userName'); // Clear the name as well
       localStorage.removeItem('userPermissions');
       setShowUserMenu(false);
       navigate('/login');
@@ -80,7 +84,6 @@ const MainLayout = () => {
       const userMenu = document.querySelector(".user-menu");
       const notificationPanel = document.querySelector(".notification-panel");
 
-      // Only close menus if clicking outside both buttons and their respective panels
       if (
         (showNotifications &&
           notificationButton &&
@@ -198,7 +201,7 @@ const MainLayout = () => {
                 <FiUser size={16} />
               </div>
               <span className="text-sm font-medium text-gray-700 hidden md:block">
-                {userRole === 'superadmin' ? 'Super Admin' : 'Admin'}
+                {userName} {/* Display the actual name */}
               </span>
             </button>
 
@@ -210,10 +213,10 @@ const MainLayout = () => {
               >
                 <div className="p-3 border-b border-gray-100">
                   <p className="text-sm font-medium text-gray-800">
-                    {userRole === 'superadmin' ? 'Super Admin' : 'Admin User'}
+                    {userName} {/* Display the actual name */}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {userRole === 'superadmin' ? 'superadmin@tekjuice.co.uk' : 'admin@tekjuice.co.uk'}
+                    {userEmail} {/* Display the actual email */}
                   </p>
                 </div>
                 <div className="py-1">

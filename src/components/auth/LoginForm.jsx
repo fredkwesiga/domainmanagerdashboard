@@ -13,36 +13,47 @@ const LoginForm = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    
+
     try {
-      const users = [
-        { email: 'superadmin@tekjuice.co.uk', password: 'superadmin2025', role: 'superadmin' },
-        { email: 'admin@tekjuice.co.uk', password: 'admin2025', role: 'admin' },
-      ];
+      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/login.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
 
-      const user = users.find(u => u.email === email && u.password === password);
-      if (user) {
+      const result = await response.json();
+
+      if (result.status === 'success') {
+        // Debug: Log the API response to check the name field
+        console.log('API Response:', result);
+
+        // Store authentication status, role, email, name, and token
         localStorage.setItem('isAuthenticated', 'true');
-        localStorage.setItem('userRole', user.role);
-        localStorage.setItem('userEmail', user.email); // Store the email
+        localStorage.setItem('userRole', result.role);
+        localStorage.setItem('userEmail', email);
+        localStorage.setItem('userName', result.name || 'User');
+        localStorage.setItem('token', result.token);
 
-        // Set permissions
-        const mockPermissions = {
-          'admin1@tekjuice.co.uk': { dashboard: true, domains: true, hosting: false, subscriptions: false, birthdays: false},
-          'admin2@tekjuice.co.uk': { dashboard: true, domains: false, hosting: true, subscriptions: false, birthdays: false},
-          'admin@tekjuice.co.uk': { dashboard: true, domains: true, hosting: true, subscriptions: true, birthdays: false},
-          'superadmin@tekjuice.co.uk': { dashboard: true, domains: true, hosting: true, subscriptions: true, settings: true, birthdays: true},
+        // Store permissions from the API response
+        const permissions = result.permissions || {
+          dashboard: false,
+          domains: false,
+          hosting: false,
+          subscriptions: false,
+          birthdays: false,
         };
-        const permissions = mockPermissions[user.email] || { dashboard: true, domains: false, hosting: false, subscriptions: false, birthdays: false};
-        console.log('LoginForm: Setting userPermissions=', permissions);
         localStorage.setItem('userPermissions', JSON.stringify(permissions));
-        
+        console.log('LoginForm: Setting userPermissions=', permissions);
+
+        // Navigate to dashboard or home
         navigate('/');
       } else {
-        throw new Error('Invalid credentials');
+        throw new Error(result.message || 'Login failed');
       }
     } catch (err) {
-      setError('Invalid credentials. Please try again.');
+      setError(err.message || 'An error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
