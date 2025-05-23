@@ -44,7 +44,7 @@ const UserManagement = () => {
 
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/manage_users.php', {
+        const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/manage_users.php?context=usermanagement', {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -474,7 +474,8 @@ const UserManagement = () => {
                           ) : (
                             <button
                               onClick={() => togglePermission(user.id, permission)}
-                              className="focus:outline-none"
+                              className="focus互通
+                              focus:outline-none"
                             >
                               {user.permissions[permission] ? (
                                 <FiCheck className="text-green-500" size={20} />
