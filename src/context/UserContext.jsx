@@ -1,41 +1,37 @@
-import React, { createContext, useContext, useState } from 'react';
+// context/UserContext.jsx
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const UserContext = createContext();
 
 export const UserProvider = ({ children }) => {
-  const defaultPermissions = {
-    dashboard: true,
-    domains: false,
-    hosting: false,
-    subscriptions: false,
-    birthdays: false,
-    expenseSync: false,
-    settings: false,
-  };
+  // Initialize userPermissions from localStorage or use default
+  const [userPermissions, setUserPermissions] = useState(() => {
+    const storedPermissions = localStorage.getItem('userPermissions');
+    return storedPermissions
+      ? JSON.parse(storedPermissions)
+      : {
+          dashboard: true,
+          domains: false,
+          packages: false,
+          expiringDomains: false,
+          expiredDomains: false,
+          hosting: false,
+          subscriptions: false,
+          birthdays: false,
+          expenseSync: false,
+          settings: false,
+        };
+  });
 
-  // Validate and initialize permissions from localStorage
-  const storedPermissions = JSON.parse(localStorage.getItem('userPermissions')) || defaultPermissions;
-  const initialPermissions = {
-    ...defaultPermissions,
-    ...Object.fromEntries(
-      Object.entries(storedPermissions).filter(([key]) => Object.keys(defaultPermissions).includes(key))
-    ),
-  };
-
-  console.log('UserContext: Initialized permissions:', initialPermissions);
-
-  const [userPermissions, setUserPermissions] = useState(initialPermissions);
+  // Sync userPermissions with localStorage changes
+  useEffect(() => {
+    console.log('UserContext: Initializing userPermissions:', userPermissions);
+  }, []);
 
   const updatePermissions = (newPermissions) => {
-    const validatedPermissions = {
-      ...defaultPermissions,
-      ...Object.fromEntries(
-        Object.entries(newPermissions).filter(([key]) => Object.keys(defaultPermissions).includes(key))
-      ),
-    };
-    console.log('UserContext: Updating permissions to', validatedPermissions);
-    setUserPermissions(validPermissions);
-    localStorage.setItem('userPermissions', JSON.stringify(validPermissions));
+    console.log('UserContext: Updating permissions:', newPermissions);
+    setUserPermissions(newPermissions);
+    localStorage.setItem('userPermissions', JSON.stringify(newPermissions));
   };
 
   return (

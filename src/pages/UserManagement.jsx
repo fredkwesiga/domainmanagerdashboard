@@ -23,6 +23,9 @@ const UserManagement = () => {
     permissions: {
       dashboard: true,
       domains: false,
+      packages: false,
+      expiringDomains: false,
+      expiredDomains: false,
       hosting: false,
       subscriptions: false,
       birthdays: false,
@@ -161,6 +164,9 @@ const UserManagement = () => {
           permissions: {
             dashboard: true,
             domains: false,
+            packages: false,
+            expiringDomains: false,
+            expiredDomains: false,
             hosting: false,
             subscriptions: false,
             birthdays: false,

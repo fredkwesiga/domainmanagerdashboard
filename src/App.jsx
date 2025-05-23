@@ -134,7 +134,7 @@ const App = () => {
               <Route
                 path="packages"
                 element={
-                  <ProtectedRoute requiredPermission="domains">
+                  <ProtectedRoute requiredPermission="packages">
                     <PackagesPage />
                   </ProtectedRoute>
                 }
@@ -142,7 +142,7 @@ const App = () => {
               <Route
                 path="packages/add"
                 element={
-                  <ProtectedRoute requiredPermission="domains">
+                  <ProtectedRoute requiredPermission="packages">
                     <AddPackagePage />
                   </ProtectedRoute>
                 }
@@ -166,7 +166,7 @@ const App = () => {
               <Route
                 path="expired"
                 element={
-                  <ProtectedRoute requiredPermission="domains">
+                  <ProtectedRoute requiredPermission="expiringDomains">
                     <ExpiredDomainsPage />
                   </ProtectedRoute>
                 }

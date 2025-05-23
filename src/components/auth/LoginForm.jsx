@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useUser } from '../../context/UserContext'; // Import useUser
 
 const LoginForm = () => {
   const [email, setEmail] = useState('');
@@ -8,6 +9,7 @@ const LoginForm = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { updatePermissions } = useUser(); // Get updatePermissions from UserContext
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -29,12 +31,16 @@ const LoginForm = () => {
         console.log('LoginForm: API Response:', result);
         console.log('LoginForm: Permissions from backend:', result.permissions);
 
+        // Store authentication data in localStorage
         localStorage.setItem('isAuthenticated', 'true');
         localStorage.setItem('userRole', result.role);
         localStorage.setItem('userEmail', email);
         localStorage.setItem('userName', result.name || 'User');
         localStorage.setItem('token', result.token);
         localStorage.setItem('userPermissions', JSON.stringify(result.permissions));
+
+        // Update UserContext with permissions
+        updatePermissions(result.permissions);
 
         navigate('/');
       } else {

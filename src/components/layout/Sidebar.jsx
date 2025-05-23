@@ -42,10 +42,10 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
 
   const domainMenuItems = [
     { icon: FiHome, label: 'Dashboard', to: '/', permission: 'dashboard' },
-    { icon: FiBox, label: 'Packages', to: '/packages', permission: 'domains' },
+    { icon: FiBox, label: 'Packages', to: '/packages', permission: 'packages' },
     { icon: FiGlobe, label: 'All Domains', to: '/domains', permission: 'domains' },
-    { icon: FiClock, label: 'Expiring Soon', to: '/expiring', permission: 'domains' },
-    { icon: FiAlertCircle, label: 'Expired Domains', to: '/expired', permission: 'domains' },
+    { icon: FiClock, label: 'Expiring Soon', to: '/expiring', permission: 'expiringDomains' },
+    { icon: FiAlertCircle, label: 'Expired Domains', to: '/expired', permission: 'expiredDomains' },
     { icon: FiServer, label: 'Hosting', to: '/hosting', permission: 'hosting' },
     { icon: FiCreditCard, label: 'Subscription', to: '/subscriptions', permission: 'subscriptions' },
     {
@@ -78,6 +78,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   );
 
   console.log('Sidebar: Filtered domain menu items:', filteredDomainMenuItems.map(item => item.label));
+  console.log('Sidebar: Filtered admin menu items:', filteredAdminItems.map(item => item.label));
 
   return (
     <aside 
