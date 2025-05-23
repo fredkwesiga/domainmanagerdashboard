@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import Input from '../components/ui/Input';
@@ -9,33 +9,108 @@ const Profile = () => {
   const navigate = useNavigate();
   const userEmail = localStorage.getItem('userEmail') || 'Unknown';
   const userRole = localStorage.getItem('userRole') || 'admin';
-  const userName = userEmail.split('@')[0].replace(/\d/g, '').replace('.', ' ') || 'User';
+  const [userName, setUserName] = useState(localStorage.getItem('userName') || 'User');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [fetchLoading, setFetchLoading] = useState(true);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  // Fetch user details on mount
+ useEffect(() => {
+  const fetchUserDetails = async () => {
+    setFetchLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/manage_users.php', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      const result = await response.json();
+      if (result.status === 'success' && result.users.length > 0) {
+        // Find user matching the logged-in email
+        const user = result.users.find((u) => u.email === userEmail);
+        if (user) {
+          setUserName(user.name);
+          localStorage.setItem('userName', user.name);
+          localStorage.setItem('userRole', user.role);
+          localStorage.setItem('permissions', JSON.stringify(user.permissions || {})); // Store permissions
+          console.log('Profile: Fetched user details:', user);
+        } else {
+          throw new Error('User not found');
+        }
+      } else {
+        throw new Error(result.message || 'Failed to fetch user details');
+      }
+    } catch (err) {
+      console.error('Profile: Error fetching user details:', err);
+      toast.error(err.message || 'Failed to load user details', { position: 'top-right', autoClose: 2000 });
+    } finally {
+      setFetchLoading(false);
+    }
+  };
+
+  fetchUserDetails();
+}, [userEmail]);
+
+  // useEffect(() => {
+  //   const fetchUserDetails = async () => {
+  //     setFetchLoading(true);
+  //     try {
+  //       const token = localStorage.getItem('token');
+  //       const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/manage_users.php', {
+  //         method: 'GET',
+  //         headers: {
+  //           'Content-Type': 'application/json',
+  //           'Authorization': `Bearer ${token}`,
+  //         },
+  //       });
+
+  //       const result = await response.json();
+  //       if (result.status === 'success') {
+  //         const user = result.users.find((u) => u.email === userEmail);
+  //         if (user) {
+  //           setUserName(user.name);
+  //           localStorage.setItem('userName', user.name);
+  //           console.log('Profile: Fetched user details:', user);
+  //         } else {
+  //           toast.error('User not found', { position: 'top-right', autoClose: 2000 });
+  //         }
+  //       } else {
+  //         throw new Error(result.message || 'Failed to fetch user details');
+  //       }
+  //     } catch (err) {
+  //       console.error('Profile: Error fetching user details:', err);
+  //       toast.error('Failed to load user details', { position: 'top-right', autoClose: 2000 });
+  //     } finally {
+  //       setFetchLoading(false);
+  //     }
+  //   };
+
+  //   fetchUserDetails();
+  // }, [userEmail]);
+
   const validateForm = () => {
     const newErrors = {};
-    const users = [
-      { email: 'superadmin@tekjuice.co.uk', password: 'superadmin2025', role: 'superadmin' },
-      { email: 'admin@tekjuice.co.uk', password: 'admin2025', role: 'admin' },
-    ];
-    const user = users.find((u) => u.email === userEmail);
-
     if (!currentPassword) {
       newErrors.currentPassword = 'Current password is required';
-    } else if (user && user.password !== currentPassword) {
-      newErrors.currentPassword = 'Current password is incorrect';
     }
     if (!newPassword) {
       newErrors.newPassword = 'New password is required';
     } else if (newPassword.length < 8) {
       newErrors.newPassword = 'Password must be at least 8 characters';
+    } else if (!/[A-Z]/.test(newPassword)) {
+      newErrors.newPassword = 'Password must contain at least one uppercase letter';
+    } else if (!/[0-9]/.test(newPassword)) {
+      newErrors.newPassword = 'Password must contain at least one number';
     }
     if (!confirmPassword) {
       newErrors.confirmPassword = 'Confirm password is required';
@@ -50,34 +125,45 @@ const Profile = () => {
     setErrors({});
     setLoading(true);
 
+    // Client-side validation
+    const formErrors = validateForm();
+    if (Object.keys(formErrors).length > 0) {
+      setErrors(formErrors);
+      toast.error('Please fix form errors', { position: 'top-right', autoClose: 2000 });
+      setLoading(false);
+      return;
+    }
+
     try {
-      const formErrors = validateForm();
-      if (Object.keys(formErrors).length > 0) {
-        setErrors(formErrors);
-        toast.error('Please fix form errors', {
-          position: 'top-right',
-          autoClose: 2000,
-        });
-        setLoading(false);
-        return;
+      const token = localStorage.getItem('token');
+      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/update_password.php', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          email: userEmail,
+          currentPassword,
+          newPassword,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.status === 'success') {
+        toast.success('Password updated successfully!', { position: 'top-right', autoClose: 2000 });
+        // Clear form
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+      } else {
+        throw new Error(result.message || 'Failed to update password');
       }
-
-      // Simulate password update (in a real app, call API)
-      console.log(`Updating password for ${userEmail} to ${newPassword}`);
-      toast.success('Password updated successfully!', {
-        position: 'top-right',
-        autoClose: 2000,
-      });
-
-      // Clear form
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
     } catch (err) {
-      toast.error('Failed to update password', {
-        position: 'top-right',
-        autoClose: 2000,
-      });
+      console.error('Profile: Error updating password:', err);
+      setErrors({ api: err.message || 'Failed to update password' });
+      toast.error(err.message || 'Failed to update password', { position: 'top-right', autoClose: 2000 });
     } finally {
       setLoading(false);
     }
@@ -90,40 +176,49 @@ const Profile = () => {
 
         {/* User Details Card */}
         <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
-          <div className="flex items-center mb-6">
-            <div className="w-12 h-12 rounded-full bg-indigo-900 flex items-center justify-center text-white mr-4">
-              <FiUser size={24} />
-            </div>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-800 capitalize">{userName}</h2>
-              <p className="text-sm text-gray-500">{userEmail}</p>
-              <p className="text-sm text-gray-500 capitalize">{userRole} User</p>
-            </div>
-          </div>
-          <div className="border-t border-gray-200 pt-4">
-            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-4">
-              User Information
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-gray-500">Full Name:</span>
-                <p className="font-medium text-gray-800 capitalize">{userName}</p>
+          {fetchLoading ? (
+            <p className="text-gray-600">Loading user details...</p>
+          ) : (
+            <>
+              <div className="flex items-center mb-6">
+                <div className="w-12 h-12 rounded-full bg-indigo-900 flex items-center justify-center text-white mr-4">
+                  <FiUser size={24} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-800 capitalize">{userName}</h2>
+                  <p className="text-sm text-gray-500">{userEmail}</p>
+                  <p className="text-sm text-gray-500 capitalize">{userRole} User</p>
+                </div>
               </div>
-              <div>
-                <span className="text-gray-500">Email:</span>
-                <p className="font-medium text-gray-800">{userEmail}</p>
+              <div className="border-t border-gray-200 pt-4">
+                <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-4">
+                  User Information
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-500">Full Name:</span>
+                    <p className="font-medium text-gray-800 capitalize">{userName}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Email:</span>
+                    <p className="font-medium text-gray-800">{userEmail}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Role:</span>
+                    <p className="font-medium text-gray-800 capitalize">{userRole}</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <span className="text-gray-500">Role:</span>
-                <p className="font-medium text-gray-800 capitalize">{userRole}</p>
-              </div>
-            </div>
-          </div>
+            </>
+          )}
         </div>
 
         {/* Change Password Form */}
         <div className="bg-white rounded-xl shadow-lg p-8">
           <h3 className="text-lg font-semibold text-gray-800 mb-6">Change Password</h3>
+          {errors.api && (
+            <div className="mb-4 p-3 text-sm text-red-700 bg-red-50 rounded-lg">{errors.api}</div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="relative">
               <Input
