@@ -29,7 +29,7 @@ const UserManagement = () => {
       hosting: false,
       subscriptions: false,
       birthdays: false,
-      expenseSync: false,
+      // expenseSync: false,
       settings: false,
     },
   });
