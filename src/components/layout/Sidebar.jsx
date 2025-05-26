@@ -44,8 +44,8 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
     { icon: FiHome, label: 'Dashboard', to: '/', permission: 'dashboard' },
     { icon: FiBox, label: 'Packages', to: '/packages', permission: 'packages' },
     { icon: FiGlobe, label: 'All Domains', to: '/domains', permission: 'domains' },
-    { icon: FiClock, label: 'Expiring Soon', to: '/expiring', permission: 'expiringDomains' },
-    { icon: FiAlertCircle, label: 'Expired Domains', to: '/expired', permission: 'expiredDomains' },
+    // { icon: FiClock, label: 'Expiring Soon', to: '/expiring', permission: 'expiringDomains' },
+    // { icon: FiAlertCircle, label: 'Expired Domains', to: '/expired', permission: 'expiredDomains' },
     { icon: FiServer, label: 'Hosting', to: '/hosting', permission: 'hosting' },
     { icon: FiCreditCard, label: 'Subscription', to: '/subscriptions', permission: 'subscriptions' },
     {
