@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { Tab } from '@headlessui/react';
 import { FiSearch, FiMoreVertical, FiX, FiEye, FiEdit, FiTrash } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const Birthdays = () => {
   const navigate = useNavigate();
@@ -16,6 +18,13 @@ const Birthdays = () => {
   const [editingPerson, setEditingPerson] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(null);
   const [formErrors, setFormErrors] = useState({});
+  const [stats, setStats] = useState({
+    total: 0,
+    today: 0,
+    in7Days: 0,
+  });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
 
   const fetchBirthdays = async () => {
     setLoading(true);
@@ -29,8 +38,8 @@ const Birthdays = () => {
           birthdayFull: item.birthday
         }));
         setData(formattedData);
+        calculateStats(formattedData);
         setFilteredData(formattedData);
-        checkBirthdays(formattedData);
       } else {
         setError(result.message);
         toast.error(result.message, { position: 'top-right', autoClose: 2000 });
@@ -47,48 +56,103 @@ const Birthdays = () => {
     fetchBirthdays();
   }, []);
 
-  const checkBirthdays = (birthdays) => {
+  const calculateStats = (birthdays) => {
     const today = new Date();
     const sevenDaysFromNow = new Date(today);
     sevenDaysFromNow.setDate(today.getDate() + 7);
 
+    let todayCount = 0;
+    let in7DaysCount = 0;
+
     birthdays.forEach((person) => {
       const [day, month] = person.birthday.split('/');
       const birthdayThisYear = new Date(today.getFullYear(), parseInt(month) - 1, parseInt(day));
-      
       if (birthdayThisYear < today) {
         birthdayThisYear.setFullYear(today.getFullYear() + 1);
       }
 
-      if (birthdayThisYear >= today && birthdayThisYear <= sevenDaysFromNow) {
-        console.log(`Sending email notification for ${person.full_name}'s birthday on ${person.birthday}`);
-        simulateEmailNotification(person);
+      const isToday = birthdayThisYear.toDateString() === today.toDateString();
+      const isWithin7Days = birthdayThisYear >= today && birthdayThisYear <= sevenDaysFromNow && !isToday;
+
+      if (isToday) {
+        todayCount++;
+      } else if (isWithin7Days) {
+        in7DaysCount++;
       }
+    });
+
+    setStats({
+      total: birthdays.length,
+      today: todayCount,
+      in7Days: in7DaysCount,
     });
   };
 
-  const simulateEmailNotification = (person) => {
-    console.log(`Email sent to admins: Birthday alert for ${person.full_name} on ${person.birthday}`);
+  const getStatus = (birthday) => {
+    const today = new Date();
+    const sevenDaysFromNow = new Date(today);
+    sevenDaysFromNow.setDate(today.getDate() + 7);
+    const [day, month] = birthday.split('/');
+    const birthdayThisYear = new Date(today.getFullYear(), parseInt(month) - 1, parseInt(day));
+    if (birthdayThisYear < today) {
+      birthdayThisYear.setFullYear(today.getFullYear() + 1);
+    }
+
+    if (birthdayThisYear.toDateString() === today.toDateString()) {
+      return { text: 'Today', color: 'bg-blue-100 text-blue-800' };
+    } else if (birthdayThisYear >= today && birthdayThisYear <= sevenDaysFromNow) {
+      return { text: 'Upcoming', color: 'bg-orange-100 text-orange-800' };
+    }
+    return { text: 'Active', color: 'bg-green-100 text-green-800' };
   };
 
-  const filterData = () => {
-    let filtered = data;
-    if (searchQuery) {
-      filtered = data.filter((person) =>
+  const filterData = (tabIndex) => {
+    const today = new Date();
+    const sevenDaysFromNow = new Date(today);
+    sevenDaysFromNow.setDate(today.getDate() + 7);
+
+    let filtered = data.filter((person) => {
+      if (!searchQuery) return true;
+      return (
         person.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         person.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
         person.next_of_kin.toLowerCase().includes(searchQuery.toLowerCase())
       );
+    });
+
+    switch (tabIndex) {
+      case 0: // All Birthdays
+        break;
+      case 1: // Today
+        filtered = filtered.filter((person) => {
+          const [day, month] = person.birthday.split('/');
+          const birthdayThisYear = new Date(today.getFullYear(), parseInt(month) - 1, parseInt(day));
+          if (birthdayThisYear < today) {
+            birthdayThisYear.setFullYear(today.getFullYear() + 1);
+          }
+          return birthdayThisYear.toDateString() === today.toDateString();
+        });
+        break;
+      case 2: // In 7 Days
+        filtered = filtered.filter((person) => {
+          const [day, month] = person.birthday.split('/');
+          const birthdayThisYear = new Date(today.getFullYear(), parseInt(month) - 1, parseInt(day));
+          if (birthdayThisYear < today) {
+            birthdayThisYear.setFullYear(today.getFullYear() + 1);
+          }
+          return birthdayThisYear >= today && birthdayThisYear <= sevenDaysFromNow && birthdayThisYear.toDateString() !== today.toDateString();
+        });
+        break;
+      default:
+        break;
     }
     setFilteredData(filtered);
+    setCurrentPage(1); // Reset to first page when filtering
   };
-
-  useEffect(() => {
-    filterData();
-  }, [searchQuery, data]);
 
   const handleSearch = (e) => {
     setSearchQuery(e.target.value);
+    filterData(0); // Reset to "All Birthdays" tab when searching
   };
 
   const handleAdd = () => {
@@ -200,7 +264,7 @@ const Birthdays = () => {
             position: 'top-right',
             autoClose: 2000,
           });
-          fetchBirthdays(); // Refresh the list
+          fetchBirthdays();
           setDropdownOpen(null);
         } else {
           toast.error(result.message || 'Failed to delete birthday', {
@@ -227,9 +291,66 @@ const Birthdays = () => {
     setDropdownOpen(null);
   };
 
+  // Pagination logic
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredData.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+
+  const getPageNumbers = () => {
+    const pageNumbers = [];
+    const maxVisiblePages = 3;
+
+    if (totalPages <= maxVisiblePages + 2) {
+      for (let i = 1; i <= totalPages; i++) {
+        pageNumbers.push(i);
+      }
+    } else {
+      pageNumbers.push(1);
+      let startPage = Math.max(2, currentPage - 1);
+      let endPage = Math.min(totalPages - 1, currentPage + 1);
+
+      if (currentPage <= maxVisiblePages - 1) {
+        endPage = maxVisiblePages;
+      } else if (currentPage >= totalPages - (maxVisiblePages - 2)) {
+        startPage = totalPages - (maxVisiblePages - 1);
+      }
+
+      if (startPage > 2) {
+        pageNumbers.push('...');
+      }
+
+      for (let i = startPage; i <= endPage; i++) {
+        pageNumbers.push(i);
+      }
+
+      if (endPage < totalPages - 1) {
+        pageNumbers.push('...');
+      }
+
+      pageNumbers.push(totalPages);
+    }
+
+    return pageNumbers;
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
+        <ToastContainer
+          position="top-right"
+          autoClose={3000}
+          hideProgressBar={false}
+          newestOnTop
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme="light"
+        />
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Birthdays</h1>
         </div>
@@ -257,98 +378,199 @@ const Birthdays = () => {
             </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                    />
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Full Name
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Birthday
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Telephone 1
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredData.map((person) => (
-                  <tr key={person.id}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                      />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-medium">
-                          {person.full_name.charAt(0)}
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">
-                            {person.full_name}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {person.birthday}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {person.telephone1}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="relative inline-block text-left">
-                        <FiMoreVertical
-                          className="text-gray-400 cursor-pointer"
-                          size={16}
-                          onClick={() => setDropdownOpen(dropdownOpen === person.id ? null : person.id)}
-                        />
-                        {dropdownOpen === person.id && (
-                          <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
-                            <div className="py-1" role="menu" aria-orientation="vertical">
-                              <button
-                                onClick={() => handleView(person)}
-                                className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
-                                role="menuitem"
-                              >
-                                <FiEye className="mr-2" size={16} />
-                                View Details
-                              </button>
-                              <button
-                                onClick={() => handleEdit(person)}
-                                className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
-                                role="menuitem"
-                              >
-                                <FiEdit className="mr-2" size={16} />
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => handleDelete(person.id)}
-                                className="flex items-center px-4 py-2 text-sm text-red-700 hover:bg-gray-100 w-full text-left"
-                                role="menuitem"
-                              >
-                                <FiTrash className="mr-2" size={16} />
-                                Delete
-                              </button>
-                            </div>
-                          </div>
+          <Tab.Group onChange={(index) => filterData(index)}>
+            <Tab.List className="border-b border-gray-200 flex space-x-1 px-6">
+              <Tab
+                className={({ selected }) =>
+                  `px-4 py-3 text-sm font-medium focus:outline-none ${
+                    selected
+                      ? 'border-b-2 border-indigo-500 text-indigo-600'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`
+                }
+              >
+                All Birthdays ({stats.total})
+              </Tab>
+              <Tab
+                className={({ selected }) =>
+                  `px-4 py-3 text-sm font-medium focus:outline-none ${
+                    selected
+                      ? 'border-b-2 border-indigo-500 text-indigo-600'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`
+                }
+              >
+                Today ({stats.today})
+              </Tab>
+              <Tab
+                className={({ selected }) =>
+                  `px-4 py-3 text-sm font-medium focus:outline-none ${
+                    selected
+                      ? 'border-b-2 border-indigo-500 text-indigo-600'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`
+                }
+              >
+                In 7 Days ({stats.in7Days})
+              </Tab>
+            </Tab.List>
+
+            <Tab.Panels>
+              {[0, 1, 2].map((tabIndex) => (
+                <Tab.Panel key={tabIndex}>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                            />
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Full Name
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Birthday
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Status
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Telephone 1
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
+                        </tr>
+                        
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {currentItems.length > 0 ? (
+                          currentItems.map((person) => {
+                            const status = getStatus(person.birthday);
+                            return (
+                              <tr key={person.id}>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                  />
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center">
+                                    <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-medium">
+                                      {person.full_name.charAt(0)}
+                                    </div>
+                                    <div className="ml-4">
+                                      <div className="text-sm font-medium text-gray-900">
+                                        {person.full_name}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {person.birthday}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span
+                                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status.color}`}
+                                  >
+                                    {status.text}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {person.telephone1}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                  <div className="relative inline-block text-left">
+                                    <FiMoreVertical
+                                      className="text-gray-400 cursor-pointer"
+                                      size={16}
+                                      onClick={() => setDropdownOpen(dropdownOpen === person.id ? null : person.id)}
+                                    />
+                                    {dropdownOpen === person.id && (
+                                      <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
+                                        <div className="py-1" role="menu" aria-orientation="vertical">
+                                          <button
+                                            onClick={() => handleView(person)}
+                                            className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                                            role="menuitem"
+                                          >
+                                            <FiEye className="mr-2" size={16} />
+                                            View Details
+                                          </button>
+                                          <button
+                                            onClick={() => handleEdit(person)}
+                                            className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                                            role="menuitem"
+                                          >
+                                            <FiEdit className="mr-2" size={16} />
+                                            Edit
+                                          </button>
+                                          <button
+                                            onClick={() => handleDelete(person.id)}
+                                            className="flex items-center px-4 py-2 text-sm text-red-700 hover:bg-gray-100 w-full text-left"
+                                            role="menuitem"
+                                          >
+                                            <FiTrash className="mr-2" size={16} />
+                                            Delete
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        ) : (
+                          <tr>
+                            <td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">
+                              No birthdays found.
+                            </td>
+                          </tr>
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      </tbody>
+                    </table>
+                  </div>
+                </Tab.Panel>
+              ))}
+            </Tab.Panels>
+          </Tab.Group>
+        </div>
+
+        {/* Pagination */}
+        <div className="flex flex-col md:flex-row items-center justify-between mt-6 px-6">
+          <div className="text-xs text-gray-500 mb-4 md:mb-0">
+            Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredData.length)} of {filteredData.length} records
+          </div>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => paginate(currentPage - 1)}
+              disabled={currentPage === 1}
+              className={`px-3 py-1 rounded-md text-xs ${currentPage === 1 ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-indigo-900 text-white hover:bg-indigo-600'}`}
+            >
+              Prev
+            </button>
+            <div className="flex space-x-1">
+              {getPageNumbers().map((number, index) => (
+                <button
+                  key={index}
+                  onClick={() => typeof number === 'number' ? paginate(number) : null}
+                  className={`px-3 py-1 rounded-md text-xs ${currentPage === number ? 'bg-indigo-900 text-white' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'} ${typeof number !== 'number' ? 'cursor-default' : ''}`}
+                  disabled={number === '...'}
+                >
+                  {number}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => paginate(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className={`px-3 py-1 rounded-md text-xs ${currentPage === totalPages ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-indigo-900 text-white hover:bg-indigo-600'}`}
+            >
+              Next
+            </button>
           </div>
         </div>
 
@@ -365,10 +587,10 @@ const Birthdays = () => {
                 </button>
               </div>
               <div className="bg-indigo-800 text-white px-3 pb-3 flex items-center">
-                <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium mr-2">
-                  Active
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatus(selectedPerson.birthday).color}`}>
+                  {getStatus(selectedPerson.birthday).text}
                 </span>
-                <span className="text-lg">{selectedPerson.full_name}</span>
+                <span className="text-lg ml-2">{selectedPerson.full_name}</span>
               </div>
               <div className="p-4">
                 <div className="flex items-start mb-4">

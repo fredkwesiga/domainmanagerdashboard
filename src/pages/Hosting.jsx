@@ -11,6 +11,8 @@ const Hosting = () => {
   const [filteredData, setFilteredData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
   const [stats, setStats] = useState({
     total: 0,
     active: 0,
@@ -207,6 +209,7 @@ const Hosting = () => {
         break;
     }
     setFilteredData(filtered);
+    setCurrentPage(1);
   };
 
   // Handle search
@@ -419,6 +422,51 @@ const Hosting = () => {
     }
   };
 
+  // Pagination logic
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredData.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+
+  const getPageNumbers = () => {
+    const pageNumbers = [];
+    const maxVisiblePages = 3;
+
+    if (totalPages <= maxVisiblePages + 2) {
+      for (let i = 1; i <= totalPages; i++) {
+        pageNumbers.push(i);
+      }
+    } else {
+      pageNumbers.push(1);
+      let startPage = Math.max(2, currentPage - 1);
+      let endPage = Math.min(totalPages - 1, currentPage + 1);
+
+      if (currentPage <= maxVisiblePages - 1) {
+        endPage = maxVisiblePages;
+      } else if (currentPage >= totalPages - (maxVisiblePages - 2)) {
+        startPage = totalPages - (maxVisiblePages - 1);
+      }
+
+      if (startPage > 2) {
+        pageNumbers.push('...');
+      }
+
+      for (let i = startPage; i <= endPage; i++) {
+        pageNumbers.push(i);
+      }
+
+      if (endPage < totalPages - 1) {
+        pageNumbers.push('...');
+      }
+
+      pageNumbers.push(totalPages);
+    }
+
+    return pageNumbers;
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
@@ -565,83 +613,85 @@ const Hosting = () => {
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {filteredData.map((item) => {
-                          const status = getStatus(item.dates.expiryDate);
-                          return (
-                            <tr key={item.id}>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <input
-                                  type="checkbox"
-                                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                                />
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex items-center">
-                                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-medium">
-                                    D
-                                  </div>
-                                  <div className="ml-4">
-                                    <div className="text-sm font-medium text-gray-900">
-                                      {item.domainName}
-                                    </div>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {item.hostingType}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span
-                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status.color}`}
-                                >
-                                  {status.text}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {formatDate(item.dates.expiryDate)}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <div className="relative inline-block text-left">
-                                  <FiMoreVertical
-                                    className="text-gray-400 cursor-pointer"
-                                    size={16}
-                                    onClick={() => setDropdownOpen(dropdownOpen === item.id ? null : item.id)}
+                        {currentItems.length > 0 ? (
+                          currentItems.map((item) => {
+                            const status = getStatus(item.dates.expiryDate);
+                            return (
+                              <tr key={item.id}>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                                   />
-                                  {dropdownOpen === item.id && (
-                                    <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
-                                      <div className="py-1" role="menu" aria-orientation="vertical">
-                                        <button
-                                          onClick={() => handleView(item)}
-                                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
-                                          role="menuitem"
-                                        >
-                                          <FiEye className="mr-2" size={16} />
-                                          View Status
-                                        </button>
-                                        <button
-                                          onClick={() => handleEdit(item)}
-                                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
-                                          role="menuitem"
-                                        >
-                                          <FiEdit className="mr-2" size={16} />
-                                          Edit
-                                        </button>
-                                        <button
-                                          onClick={() => handleDelete(item)}
-                                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
-                                          role="menuitem"
-                                        >
-                                          <FiTrash className="mr-2" size={16} />
-                                          Delete
-                                        </button>
-                                      </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center">
+                                    <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-medium">
+                                      D
                                     </div>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
+                                    <div className="ml-4">
+                                      <div className="text-sm font-medium text-gray-900">{item.domainName}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.hostingType}</td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span
+                                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status.color}`}
+                                  >
+                                    {status.text}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(item.dates.expiryDate)}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                  <div className="relative inline-block text-left">
+                                    <FiMoreVertical
+                                      className="text-gray-400 cursor-pointer"
+                                      size={16}
+                                      onClick={() => setDropdownOpen(dropdownOpen === item.id ? null : item.id)}
+                                    />
+                                    {dropdownOpen === item.id && (
+                                      <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
+                                        <div className="py-1" role="menu" aria-orientation="vertical">
+                                          <button
+                                            onClick={() => handleView(item)}
+                                            className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                                            role="menuitem"
+                                          >
+                                            <FiEye className="mr-2" size={16} />
+                                            View Status
+                                          </button>
+                                          <button
+                                            onClick={() => handleEdit(item)}
+                                            className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                                            role="menuitem"
+                                          >
+                                            <FiEdit className="mr-2" size={16} />
+                                            Edit
+                                          </button>
+                                          <button
+                                            onClick={() => handleDelete(item)}
+                                            className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                                            role="menuitem"
+                                          >
+                                            <FiTrash className="mr-2" size={16} />
+                                            Delete
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        ) : (
+                          <tr>
+                            <td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">
+                              No hosting records found.
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -649,6 +699,51 @@ const Hosting = () => {
               ))}
             </Tab.Panels>
           </Tab.Group>
+        </div>
+
+        {/* Pagination */}
+        <div className="flex flex-col md:flex-row items-center justify-between mt-4">
+          <div className="text-xs text-gray-500 mb-4 md:mb-0">
+            Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredData.length)} of {filteredData.length} records
+          </div>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => paginate(currentPage - 1)}
+              disabled={currentPage === 1}
+              className={`px-3 py-1 rounded-md text-xs ${
+                currentPage === 1 ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-indigo-900 text-white hover:bg-indigo-600'
+              }`}
+            >
+              Prev
+            </button>
+            <div className="flex space-x-1">
+              {getPageNumbers().map((number, index) => (
+                <button
+                  key={index}
+                  onClick={() => typeof number === 'number' && paginate(number)}
+                  className={`px-3 py-1 rounded-md text-xs ${
+                    currentPage === number
+                      ? 'bg-indigo-900 text-white'
+                      : number === '...'
+                      ? 'bg-white text-gray-700 cursor-default'
+                      : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                  }`}
+                  disabled={number === '...'}
+                >
+                  {number}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => paginate(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className={`px-3 py-1 rounded-md text-xs ${
+                currentPage === totalPages ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-indigo-900 text-white hover:bg-indigo-600'
+              }`}
+            >
+              Next
+            </button>
+          </div>
         </div>
 
         {/* View Modal */}
