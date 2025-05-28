@@ -6,6 +6,7 @@ import {
   FiEdit,
   FiTrash2,
 } from "react-icons/fi";
+import { FiEdit2, FiTrash } from "react-icons/fi";
 import {
   formatDate,
   isDomainActive,
@@ -32,6 +33,8 @@ const DomainTable = ({
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [viewingDomain, setViewingDomain] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [showNoteInput, setShowNoteInput] = useState(false);
+  const [note, setNote] = useState('');
   const { notifyDomainExpiring, addNotification } = useNotifications();
 
   const toggleSelectAll = (e) => {
@@ -46,11 +49,9 @@ const DomainTable = ({
     );
   };
 
-  // Check for expiring domains and create notifications
   useEffect(() => {
     domains.forEach((domain) => {
       const daysLeft = calculateDaysUntilExpiry(domain.dates?.expiryDate);
-      // Only notify for domains that are expiring soon (within 30 days)
       if (daysLeft <= 30 && daysLeft > 0) {
         notifyDomainExpiring(domain, daysLeft);
       }
@@ -95,13 +96,10 @@ const DomainTable = ({
       const result = await res.json();
       if (result.status === "success") {
         toast.success(result.message);
-
-        // Add specific notification for domain deletion
         addNotification({
           type: NOTIFICATION_TYPES.SUCCESS,
           message: `Domain ${domain.domainName} has been deleted successfully.`,
         });
-
         refreshDomains && refreshDomains();
       } else {
         toast.error(result.message);
@@ -112,58 +110,88 @@ const DomainTable = ({
   };
 
   const handleEdit = (domain) => {
-    // Ensure invoice_status property exists
     const domainToEdit = {
       ...domain,
       invoiceStatus: domain.invoiceStatus || false,
+      note: domain.note || '', // Load existing note
     };
     setEditingDomain(domainToEdit);
     setShowEditForm(true);
+    setShowDropdown(null);
+    setShowNoteInput(!!domain.note); // Show note input if note exists
+    setNote(domain.note || ''); // Set existing note
   };
 
   const handleViewStatus = (domain) => {
-    // Ensure invoice_status property exists
     const domainToView = {
       ...domain,
       invoiceStatus: domain.invoiceStatus || false,
+      note: domain.note || '', // Load note for viewing
     };
     setViewingDomain(domainToView);
     setShowStatusModal(true);
+    setShowDropdown(null);
   };
 
   const handleUpdate = async (updatedDomain) => {
-    setIsSaving(true); // Start loading
+    setIsSaving(true);
     try {
       const res = await fetch(
         "https://goldenrod-cattle-809116.hostingersite.com/updatedomain.php",
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(updatedDomain),
+          body: JSON.stringify({
+            id: updatedDomain.id,
+            domainName: updatedDomain.domainName,
+            owner: updatedDomain.owner,
+            contact: updatedDomain.contact,
+            dates: updatedDomain.dates,
+            package: updatedDomain.package,
+            amount: updatedDomain.amount,
+            invoiceStatus: updatedDomain.invoiceStatus,
+            note: note, // Send the note to the backend
+          }),
         }
       );
 
       const result = await res.json();
       if (result.status === "success") {
+        // Update local state with the note
+        const updatedDomains = domains.map((d) =>
+          d.id === updatedDomain.id
+            ? { ...d, ...updatedDomain, note }
+            : d
+        );
         setShowEditForm(false);
-
-        // Add specific notification for domain update
         addNotification({
           type: NOTIFICATION_TYPES.SUCCESS,
           message: `Domain ${updatedDomain.domainName} has been updated successfully.`,
         });
-
-        refreshDomains && refreshDomains();
+        refreshDomains && refreshDomains(updatedDomains); // Pass updated domains to parent
+      } else {
+        throw new Error(result.message);
       }
     } catch (error) {
       console.error("Error updating domain:", error);
       addNotification({
         type: NOTIFICATION_TYPES.DANGER,
-        message: `Failed to update domain ${updatedDomain.domainName}.`,
+        message: `Failed to update domain ${updatedDomain.domainName}: ${error.message}`,
       });
     } finally {
-      setIsSaving(false); // End loading
+      setIsSaving(false);
     }
+  };
+
+  const handleRemoveNote = () => {
+    setNote('');
+    const updatedViewingDomain = { ...viewingDomain, note: '' };
+    setViewingDomain(updatedViewingDomain);
+    handleUpdate(updatedViewingDomain); // Save the removal to the backend
+  };
+
+  const handleNoteChange = (e) => {
+    setNote(e.target.value);
   };
 
   return (
@@ -194,9 +222,6 @@ const DomainTable = ({
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
                 {showDaysUntilExpiry ? "Days Left" : "Expiry Date"}
               </th>
-              {/* <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
-                Invoice
-              </th> */}
               <th className="px-6 py-3 relative">
                 <span className="sr-only">Actions</span>
               </th>
@@ -270,15 +295,6 @@ const DomainTable = ({
                       formatDate(domain.dates?.expiryDate)
                     )}
                   </td>
-                  {/* <td className="px-6 py-4 text-xs text-gray-500">
-                    <span
-                      className={
-                        domain.invoiceStatus ? "text-green-600" : "text-red-600"
-                      }
-                    >
-                      {domain.invoiceStatus ? "Invoiced" : "Not Invoiced"}
-                    </span>
-                  </td> */}
                   <td className="px-6 py-4 text-right relative">
                     <button
                       onClick={() =>
@@ -332,11 +348,10 @@ const DomainTable = ({
         </table>
       </div>
 
-      {/* View Status Modal - Modern Redesign */}
+      {/* View Status Modal */}
       {showStatusModal && viewingDomain && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-            {/* Modal Header */}
             <div className="bg-indigo-900 p-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold text-white">Domain Status</h2>
@@ -376,9 +391,7 @@ const DomainTable = ({
               </div>
             </div>
 
-            {/* Modal Content */}
             <div className="p-6 space-y-6 max-h-[65vh] overflow-y-auto">
-              {/* Domain Information Card */}
               <div className="dark:bg-indigo-900 p-5 rounded-xl">
                 <div className="flex items-center mb-3">
                   <div className="bg-indigo-100 dark:bg-indigo-900/50 p-2 rounded-lg mr-3">
@@ -402,7 +415,6 @@ const DomainTable = ({
                   </h3>
                 </div>
                 <div className="space-y-3">
-                  {/* Package */}
                   <div className="flex justify-between">
                     <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
                       Package
@@ -411,8 +423,6 @@ const DomainTable = ({
                       {viewingDomain.package || "N/A"}
                     </span>
                   </div>
-
-                  {/* Start Date */}
                   <div className="flex justify-between">
                     <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
                       Start Date
@@ -421,8 +431,6 @@ const DomainTable = ({
                       {formatDate(viewingDomain.dates?.startDate)}
                     </span>
                   </div>
-
-                  {/* Expiry Date */}
                   <div className="flex justify-between">
                     <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
                       Expiry Date
@@ -431,8 +439,6 @@ const DomainTable = ({
                       {formatDate(viewingDomain.dates?.expiryDate)}
                     </span>
                   </div>
-
-                  {/* Invoice Status */}
                   <div className="flex justify-between items-center pt-1">
                     <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
                       Invoice Status
@@ -450,7 +456,6 @@ const DomainTable = ({
                 </div>
               </div>
 
-              {/* Owner Information Card */}
               <div className="dark:bg-indigo-900 p-5 rounded-xl">
                 <div className="flex items-center mb-3">
                   <div className="bg-purple-100 dark:bg-purple-900/50 p-2 rounded-lg mr-3">
@@ -474,7 +479,6 @@ const DomainTable = ({
                   </h3>
                 </div>
                 <div className="space-y-3">
-                  {/* Name */}
                   <div className="flex justify-between">
                     <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
                       Name
@@ -485,8 +489,6 @@ const DomainTable = ({
                       }`.trim() || "N/A"}
                     </span>
                   </div>
-
-                  {/* Primary Email */}
                   <div className="flex justify-between">
                     <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
                       Primary Email
@@ -498,8 +500,6 @@ const DomainTable = ({
                       {viewingDomain.contact?.email1}
                     </a>
                   </div>
-
-                  {/* Backup Email */}
                   <div className="flex justify-between">
                     <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
                       Backup Email
@@ -517,8 +517,6 @@ const DomainTable = ({
                       </span>
                     )}
                   </div>
-
-                  {/* Primary Phone */}
                   <div className="flex justify-between">
                     <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
                       Primary Phone
@@ -530,8 +528,6 @@ const DomainTable = ({
                       {viewingDomain.contact?.phone1}
                     </a>
                   </div>
-
-                  {/* Backup Phone */}
                   <div className="flex justify-between">
                     <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
                       Backup Phone
@@ -551,9 +547,44 @@ const DomainTable = ({
                   </div>
                 </div>
               </div>
+
+              {/* Note Section */}
+              {viewingDomain.note && (
+                <div className="dark:bg-yellow-900/50 p-5 rounded-xl">
+                  <div className="flex items-center mb-3">
+                    <div className="bg-yellow-100 dark:bg-yellow-900/50 p-2 rounded-lg mr-3">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-5 w-5 text-yellow-600 dark:text-yellow-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                      </svg>
+                    </div>
+                    <h3 className="font-semibold text-gray-800 dark:text-gray-100 flex items-center justify-between w-full">
+                      Note
+                      <button
+                        onClick={handleRemoveNote}
+                        className="text-red-600 hover:text-red-800 text-sm flex items-center"
+                      >
+                        <FiTrash className="mr-1" size={14} /> Remove
+                      </button>
+                    </h3>
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    {viewingDomain.note}
+                  </p>
+                </div>
+              )}
             </div>
 
-            {/* Modal Footer */}
             <div className="px-6 pb-6">
               <button
                 type="button"
@@ -578,7 +609,6 @@ const DomainTable = ({
                 handleUpdate(editingDomain);
               }}
             >
-              {/* Domain Name - Non-editable */}
               <div className="mb-4">
                 <label className="block text-xs font-medium text-gray-700">
                   Domain Name
@@ -592,7 +622,6 @@ const DomainTable = ({
               </div>
 
               <div className="flex w-full justify-between gap-5">
-                {/* First Name */}
                 <div className="mb-4 w-full">
                   <label className="block text-xs font-medium text-gray-700">
                     Owner First Name
@@ -613,8 +642,6 @@ const DomainTable = ({
                     required
                   />
                 </div>
-
-                {/* Last Name */}
                 <div className="mb-4 w-full">
                   <label className="block text-xs font-medium text-gray-700">
                     Owner Last Name
@@ -638,7 +665,6 @@ const DomainTable = ({
               </div>
 
               <div className="flex w-full justify-between gap-5">
-                {/* Email 1 */}
                 <div className="mb-4 w-full">
                   <label className="block text-xs font-medium text-gray-700">
                     Primary Email
@@ -659,8 +685,6 @@ const DomainTable = ({
                     required
                   />
                 </div>
-
-                {/* Email 2 */}
                 <div className="mb-4 w-full">
                   <label className="block text-xs font-medium text-gray-700">
                     Backup Email
@@ -683,7 +707,6 @@ const DomainTable = ({
               </div>
 
               <div className="flex w-full justify-between gap-5">
-                {/* Phone 1 */}
                 <div className="mb-4 w-full">
                   <label className="block text-xs font-medium text-gray-700">
                     Primary Phone
@@ -704,8 +727,6 @@ const DomainTable = ({
                     required
                   />
                 </div>
-
-                {/* Phone 2 */}
                 <div className="mb-4 w-full">
                   <label className="block text-xs font-medium text-gray-700">
                     Backup Phone
@@ -728,7 +749,6 @@ const DomainTable = ({
               </div>
 
               <div className="flex w-full justify-between gap-5">
-                {/* Expiry Date */}
                 <div className="mb-4 w-full">
                   <label className="block text-xs font-medium text-gray-700">
                     Expiry Date
@@ -751,7 +771,6 @@ const DomainTable = ({
                 </div>
               </div>
 
-              {/* Invoice Status */}
               <div className="mb-4 w-full">
                 <label className="block text-xs font-medium text-gray-700 mb-2">
                   Invoice Status
@@ -774,7 +793,27 @@ const DomainTable = ({
                 </div>
               </div>
 
-              {/* Package info */}
+              <div className="mb-4 w-full">
+                <button
+                  type="button"
+                  onClick={() => setShowNoteInput(!showNoteInput)}
+                  className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center"
+                >
+                  <FiEdit2 className="mr-1" size={14} /> Add Note
+                </button>
+                {showNoteInput && (
+                  <div className="mt-2">
+                    <textarea
+                      className="w-full mt-1 p-2 text-xs border rounded-md"
+                      value={note}
+                      onChange={handleNoteChange}
+                      rows="3"
+                      placeholder="e.g., Invoice was sent but email bounced"
+                    />
+                  </div>
+                )}
+              </div>
+
               <div className="mb-4">
                 <label className="block text-xs font-medium text-gray-700">
                   Package
@@ -790,7 +829,6 @@ const DomainTable = ({
                 </p>
               </div>
 
-              {/* Buttons */}
               <div className="mt-4 w-full justify-between flex gap-5">
                 <button
                   type="button"
