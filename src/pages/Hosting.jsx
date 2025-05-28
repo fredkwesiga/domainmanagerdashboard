@@ -60,7 +60,7 @@ const Hosting = () => {
           package: item.package_id,
           amount: item.amount,
           currency: item.currency,
-          invoiceStatus: item.invoice_status,
+          invoiceStatus: !!item.invoice_status, // Ensure boolean
           serverDetails: {
             ipAddress: item.ip_address || '',
             nameservers: [item.nameserver1 || '', item.nameserver2 || ''],
@@ -317,8 +317,11 @@ const Hosting = () => {
 
   // Handle form input changes
   const handleEditChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
     if (formErrors[name]) {
       setFormErrors((prev) => ({ ...prev, [name]: '' }));
     }
@@ -378,7 +381,7 @@ const Hosting = () => {
       package: formData.package,
       amount: formData.amount,
       currency: formData.currency,
-      invoiceStatus: formData.invoiceStatus || 'Pending',
+      invoiceStatus: formData.invoiceStatus, // Send boolean value
       serverDetails: {
         ipAddress: formData.ipAddress || '',
         nameservers: [formData.nameserver1 || '', formData.nameserver2 || ''],
@@ -470,7 +473,6 @@ const Hosting = () => {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Toast Container */}
         <ToastContainer
           position="top-right"
           autoClose={3000}
@@ -484,12 +486,16 @@ const Hosting = () => {
           theme="light"
         />
 
-        {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Hosting</h1>
+          <button
+            className="mt-4 md:mt-0 bg-indigo-900 text-white font-medium rounded-md text-xs px-4 py-2 hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            onClick={() => navigate('/hosting/add')}
+          >
+            + Add New Hosting
+          </button>
         </div>
 
-        {/* Search and Add Button */}
         <div className="bg-white shadow rounded-lg overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
             <div className="relative w-full max-w-xs">
@@ -505,15 +511,8 @@ const Hosting = () => {
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
-            <button
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-semibold rounded-md shadow-sm text-white bg-indigo-900 hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              onClick={() => navigate('/hosting/add')}
-            >
-              + Add New Hosting
-            </button>
           </div>
 
-          {/* Tabs */}
           <Tab.Group onChange={(index) => filterData(index)}>
             <Tab.List className="border-b border-gray-200 flex space-x-1 px-6">
               <Tab
@@ -701,7 +700,6 @@ const Hosting = () => {
           </Tab.Group>
         </div>
 
-        {/* Pagination */}
         <div className="flex flex-col md:flex-row items-center justify-between mt-4">
           <div className="text-xs text-gray-500 mb-4 md:mb-0">
             Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredData.length)} of {filteredData.length} records
@@ -746,7 +744,6 @@ const Hosting = () => {
           </div>
         </div>
 
-        {/* View Modal */}
         {showModal && selectedHosting && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-lg w-full max-w-md">
@@ -783,8 +780,12 @@ const Hosting = () => {
                       <div className="text-right font-medium">{formatDate(selectedHosting.dates.expiryDate)}</div>
                       <div className="text-gray-500">Invoice Status</div>
                       <div className="text-right">
-                        <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
-                          {selectedHosting.invoiceStatus}
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          selectedHosting.invoiceStatus
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {selectedHosting.invoiceStatus ? 'Invoiced' : 'Pending'}
                         </span>
                       </div>
                       <div className="text-gray-500">Amount</div>
@@ -833,14 +834,13 @@ const Hosting = () => {
           </div>
         )}
 
-        {/* Edit Modal */}
         {editModalOpen && formData && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl max-h-[80vh] overflow-y-auto p-3">
-              <h2 className="text-xl font-bold mb-4">Edit Hosting</h2>
-              <form onSubmit={handleUpdateHosting} className="space-y-2">
-                <div>
-                  <label className="block text-gray-700 text-sm mb-1">Hosted Domain</label>
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div className="bg-white p-6 rounded-lg shadow-lg w-[600px] max-h-[90vh] overflow-y-auto">
+              <h2 className="text-lg mb-4">Edit Hosting</h2>
+              <form onSubmit={handleUpdateHosting}>
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700">Hosted Domain</label>
                   <input
                     type="text"
                     name="domainName"
@@ -848,14 +848,15 @@ const Hosting = () => {
                     onChange={handleEditChange}
                     required
                     placeholder="e.g., example.com"
-                    className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full mt-1 p-2 border text-xs font-semibold rounded-md bg-gray-100"
+                    disabled
                   />
                   {formErrors.domainName && (
                     <p className="mt-1 text-xs text-red-500">{formErrors.domainName}</p>
                   )}
                 </div>
-                <div>
-                  <label className="block text-gray-700 text-sm mb-1">Hosting Type</label>
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700">Hosting Type</label>
                   <input
                     type="text"
                     name="hostingType"
@@ -863,15 +864,16 @@ const Hosting = () => {
                     onChange={handleEditChange}
                     required
                     placeholder="e.g., Shared"
-                    className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full mt-1 p-2 text-xs border border-gray-300 rounded-md px-2 py-1.5 text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                   />
                   {formErrors.hostingType && (
                     <p className="mt-1 text-xs text-red-500">{formErrors.hostingType}</p>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-gray-700 text-sm mb-1">First Name</label>
+
+                <div className="flex w-full justify-between gap-5">
+                  <div className="mb-4 w-full">
+                    <label className="block text-xs font-medium text-gray-700">First Name</label>
                     <input
                       type="text"
                       name="firstName"
@@ -879,14 +881,14 @@ const Hosting = () => {
                       onChange={handleEditChange}
                       required
                       placeholder="e.g., John"
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                      className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                     />
                     {formErrors.firstName && (
                       <p className="mt-1 text-xs text-red-500">{formErrors.firstName}</p>
                     )}
                   </div>
-                  <div>
-                    <label className="block text-gray-700 text-sm mb-1">Last Name</label>
+                  <div className="mb-4 w-full">
+                    <label className="block text-xs font-medium text-gray-700">Last Name</label>
                     <input
                       type="text"
                       name="lastName"
@@ -894,15 +896,16 @@ const Hosting = () => {
                       onChange={handleEditChange}
                       required
                       placeholder="e.g., Doe"
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                      className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                     />
                     {formErrors.lastName && (
                       <p className="mt-1 text-xs text-red-500">{formErrors.lastName}</p>
                     )}
                   </div>
                 </div>
-                <div>
-                  <label className="block text-gray-700 text-sm mb-1">Primary Email</label>
+
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700">Primary Email</label>
                   <input
                     type="email"
                     name="email1"
@@ -910,79 +913,98 @@ const Hosting = () => {
                     onChange={handleEditChange}
                     required
                     placeholder="e.g., john.doe@example.com"
-                    className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                   />
                   {formErrors.email1 && (
                     <p className="mt-1 text-xs text-red-500">{formErrors.email1}</p>
                   )}
                 </div>
-                <div>
-                  <label className="block text-gray-700 text-sm mb-1">Backup Email (Optional)</label>
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700">Backup Email (Optional)</label>
                   <input
                     type="email"
                     name="email2"
                     value={formData.email2}
                     onChange={handleEditChange}
                     placeholder="e.g., backup@example.com"
-                    className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-gray-700 text-sm mb-1">Primary Phone</label>
+
+                <div className="flex w-full justify-between gap-5">
+                  <div className="mb-4 w-full">
+                    <label className="block text-xs font-medium text-gray-700">Primary Phone</label>
                     <input
                       type="tel"
                       name="phone1"
                       value={formData.phone1}
                       onChange={handleEditChange}
                       placeholder="e.g., +1234567890"
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                      className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                     />
                   </div>
-                  <div>
-                    <label className="block text-gray-700 text-sm mb-1">Backup Phone (Optional)</label>
+                  <div className="mb-4 w-full">
+                    <label className="block text-xs font-medium text-gray-700">Backup Phone (Optional)</label>
                     <input
                       type="tel"
                       name="phone2"
                       value={formData.phone2}
                       onChange={handleEditChange}
                       placeholder="e.g., +1234567891"
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                      className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-gray-700 text-sm mb-1">Start Date</label>
+
+                <div className="flex w-full justify-between gap-5">
+                  <div className="mb-4 w-full">
+                    <label className="block text-xs font-medium text-gray-700">Start Date</label>
                     <input
                       type="date"
                       name="startDate"
                       value={formatDateForInput(formData.startDate)}
                       onChange={handleEditChange}
                       required
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                      className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                     />
                     {formErrors.startDate && (
                       <p className="mt-1 text-xs text-red-500">{formErrors.startDate}</p>
                     )}
                   </div>
-                  <div>
-                    <label className="block text-gray-700 text-sm mb-1">Expiry Date</label>
+                  <div className="mb-4 w-full">
+                    <label className="block text-xs font-medium text-gray-700">Expiry Date</label>
                     <input
                       type="date"
                       name="expiryDate"
                       value={formatDateForInput(formData.expiryDate)}
                       onChange={handleEditChange}
                       required
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                      className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                     />
                     {formErrors.expiryDate && (
                       <p className="mt-1 text-xs text-red-500">{formErrors.expiryDate}</p>
                     )}
                   </div>
                 </div>
-                <div>
-                  <label className="block text-gray-700 text-sm mb-1">Package</label>
+
+                <div className="mb-4 w-full">
+                  <label className="block text-xs font-medium text-gray-700 mb-2">Invoice Status</label>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="invoiceStatus"
+                      checked={formData.invoiceStatus || false}
+                      onChange={handleEditChange}
+                      className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                    />
+                    <span className="ml-2 text-xs text-gray-700">
+                      {formData.invoiceStatus ? 'Invoiced' : 'Not Invoiced'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700">Package</label>
                   <input
                     type="text"
                     name="package"
@@ -990,113 +1012,14 @@ const Hosting = () => {
                     onChange={handleEditChange}
                     required
                     placeholder="e.g., Basic"
-                    className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                   />
                   {formErrors.package && (
                     <p className="mt-1 text-xs text-red-500">{formErrors.package}</p>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-gray-700 text-sm mb-1">Amount</label>
-                    <input
-                      type="number"
-                      name="amount"
-                      value={formData.amount}
-                      onChange={handleEditChange}
-                      required
-                      placeholder="e.g., 100"
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                    {formErrors.amount && (
-                      <p className="mt-1 text-xs text-red-500">{formErrors.amount}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 text-sm mb-1">Currency</label>
-                    <input
-                      type="text"
-                      name="currency"
-                      value={formData.currency}
-                      onChange={handleEditChange}
-                      required
-                      placeholder="e.g., USD"
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                    {formErrors.currency && (
-                      <p className="mt-1 text-xs text-red-500">{formErrors.currency}</p>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-gray-700 text-sm mb-1">Invoice Status</label>
-                  <input
-                    type="text"
-                    name="invoiceStatus"
-                    value={formData.invoiceStatus}
-                    onChange={handleEditChange}
-                    placeholder="e.g., Pending"
-                    className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-700 text-sm mb-1">IP Address (Optional)</label>
-                  <input
-                    type="text"
-                    name="ipAddress"
-                    value={formData.ipAddress}
-                    onChange={handleEditChange}
-                    placeholder="e.g., 192.168.1.1"
-                    className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-gray-700 text-sm mb-1">Nameserver 1 (Optional)</label>
-                    <input
-                      type="text"
-                      name="nameserver1"
-                      value={formData.nameserver1}
-                      onChange={handleEditChange}
-                      placeholder="e.g., ns1.example.com"
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 text-sm mb-1">Nameserver 2 (Optional)</label>
-                    <input
-                      type="text"
-                      name="nameserver2"
-                      value={formData.nameserver2}
-                      onChange={handleEditChange}
-                      placeholder="e.g., ns2.example.com"
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-gray-700 text-sm mb-1">Disk Space (Optional)</label>
-                  <input
-                    type="text"
-                    name="diskSpace"
-                    value={formData.diskSpace}
-                    onChange={handleEditChange}
-                    placeholder="e.g., 10GB"
-                    className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-700 text-sm mb-1">Bandwidth (Optional)</label>
-                  <input
-                    type="text"
-                    name="bandwidth"
-                    value={formData.bandwidth}
-                    onChange={handleEditChange}
-                    placeholder="e.g., 100GB"
-                    className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-4">
+
+                <div className="mt-4 w-full justify-between flex gap-5">
                   <button
                     type="button"
                     onClick={() => {
@@ -1104,16 +1027,16 @@ const Hosting = () => {
                       setFormData(null);
                       setFormErrors({});
                     }}
-                    className="w-full py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-md focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-gray-500"
+                    className="ml-2 bg-gray-600 text-xs font-semibold text-white px-4 py-2 rounded-md w-full"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="w-full py-2 bg-indigo-800 hover:bg-indigo-900 text-white text-sm font-medium rounded-md focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-indigo-500"
+                    className="bg-indigo-900 text-xs font-semibold text-white px-4 py-2 rounded-md w-full flex items-center justify-center"
                     disabled={Object.keys(formErrors).length > 0}
                   >
-                    Save Changes
+                    Save
                   </button>
                 </div>
               </form>
@@ -1121,7 +1044,6 @@ const Hosting = () => {
           </div>
         )}
 
-        {/* Delete Confirmation Modal */}
         {deleteModalOpen && selectedHosting && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6">
@@ -1153,7 +1075,6 @@ const Hosting = () => {
           </div>
         )}
 
-        {/* Loading and Error States */}
         {loading && (
           <div className="mt-8 text-center">
             <div className="inline-flex items-center px-4 py-2 font-semibold leading-6 text-sm shadow rounded-md text-white bg-indigo-900 transition ease-in-out duration-150 cursor-not-allowed">

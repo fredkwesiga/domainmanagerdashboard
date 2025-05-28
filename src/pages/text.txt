@@ -1,0 +1,102 @@
+<?php
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
+require_once 'config.php';
+
+// First, check if the invoice_status column exists in the domains table
+function columnExists($conn, $table, $column) {
+    try {
+        $query = "SHOW COLUMNS FROM $table LIKE '$column'";
+        $stmt = $conn->prepare($query);
+        $stmt->execute();
+        return $stmt->rowCount() > 0;
+    } catch (PDOException $e) {
+        return false;
+    }
+}
+
+// Add invoice_status column if it doesn't exist
+if (!columnExists($conn, 'domains', 'invoice_status')) {
+    try {
+        $query = "ALTER TABLE domains ADD COLUMN invoice_status BOOLEAN DEFAULT 0";
+        $conn->exec($query);
+    } catch (PDOException $e) {
+        echo json_encode(["status" => "error", "message" => "Failed to add invoice_status column: " . $e->getMessage()]);
+        exit();
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
+    $data = json_decode(file_get_contents("php://input"), true);
+    
+    // Check if the ID is present in the request
+    if (!isset($data['id'])) {
+        echo json_encode(["status" => "error", "message" => "Missing ID"]);
+        exit();
+    }
+    
+    // Prepare the update statement with the new invoice_status field
+    $stmt = $conn->prepare("UPDATE domains SET 
+        domain_name = :domain_name,
+        first_name = :first_name,
+        last_name = :last_name,
+        email1 = :email1,
+        email2 = :email2,
+        phone1 = :phone1,
+        phone2 = :phone2,
+        start_date = :start_date,
+        expiry_date = :expiry_date,
+        package = :package,
+        amount = :amount,
+        note = :note,
+        invoice_status = :invoice_status
+        WHERE id = :id");
+    
+    // Ensure we create regular variables to pass by reference to bindParam
+    $domain_name = isset($data['domainName']) ? $data['domainName'] : null;
+    $first_name = isset($data['owner']['firstName']) ? $data['owner']['firstName'] : null;
+    $last_name = isset($data['owner']['lastName']) ? $data['owner']['lastName'] : null;
+    $email1 = isset($data['contact']['email1']) ? $data['contact']['email1'] : null;
+    $email2 = isset($data['contact']['email2']) ? $data['contact']['email2'] : null;
+    $phone1 = isset($data['contact']['phone1']) ? $data['contact']['phone1'] : null;
+    $phone2 = isset($data['contact']['phone2']) ? $data['contact']['phone2'] : null;
+    $start_date = isset($data['dates']['startDate']) ? $data['dates']['startDate'] : null;
+    $expiry_date = isset($data['dates']['expiryDate']) ? $data['dates']['expiryDate'] : null;
+    $package = isset($data['package']) ? $data['package'] : null;
+    $amount = isset($data['amount']) ? $data['amount'] : null;
+    $note = isset($data['note']) ? $data['note'] : null;
+    $invoice_status = isset($data['invoiceStatus']) ? ($data['invoiceStatus'] ? 1 : 0) : 0;
+    $id = $data['id']; // The ID should always be present
+    
+    // Bind parameters
+    $stmt->bindParam(':id', $id);
+    $stmt->bindParam(':domain_name', $domain_name);
+    $stmt->bindParam(':first_name', $first_name);
+    $stmt->bindParam(':last_name', $last_name);
+    $stmt->bindParam(':email1', $email1);
+    $stmt->bindParam(':email2', $email2);
+    $stmt->bindParam(':phone1', $phone1);
+    $stmt->bindParam(':phone2', $phone2);
+    $stmt->bindParam(':start_date', $start_date);
+    $stmt->bindParam(':expiry_date', $expiry_date);
+    $stmt->bindParam(':package', $package);
+    $stmt->bindParam(':amount', $amount);
+    $stmt->bindParam(':note', $note);
+    $stmt->bindParam(':invoice_status', $invoice_status, PDO::PARAM_BOOL);
+    
+    try {
+        // Execute the query
+        $stmt->execute();
+        // Check if the domain was updated
+        if ($stmt->rowCount() > 0) {
+            echo json_encode(["status" => "success", "message" => "Domain updated successfully"]);
+        } else {
+            echo json_encode(["status" => "error", "message" => "Domain not found or no changes made"]);
+        }
+    } catch (PDOException $e) {
+        echo json_encode(["status" => "error", "message" => "Database error: " . $e->getMessage()]);
+    }
+} else {
+    echo json_encode(["status" => "error", "message" => "Invalid request method"]);
+}
+?>
