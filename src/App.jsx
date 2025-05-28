@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { UserProvider, useUser } from './context/UserContext'; // Import useUser
+import { UserProvider, useUser } from './context/UserContext';
 import { NotificationProvider } from './components/layout/NotificationContext';
 import MainLayout from './components/layout/MainLayout';
 import Dashboard from './pages/Dashboard';
@@ -16,6 +16,7 @@ import Hosting from './pages/Hosting';
 import Subscription from './pages/Subscription';
 import SubscriptionForm from './pages/SubscriptionForm';
 import DomainAndHosting from './pages/DomainAndHosting';
+import DomainAndHostingForm from './pages/DomainAndHostingForm'; // New import
 import CompanyExpenses from './pages/CompanyExpenses';
 import Birthdays from './pages/Birthdays';
 import UserManagement from './pages/UserManagement';
@@ -62,7 +63,7 @@ class ErrorBoundary extends React.Component {
 
 // Protected route component
 const ProtectedRoute = ({ children, requiredPermission, superAdminOnly = false }) => {
-  const { userPermissions } = useUser(); // Use UserContext
+  const { userPermissions } = useUser();
   const userRole = localStorage.getItem('userRole') || 'admin';
   const userEmail = localStorage.getItem('userEmail') || 'unknown';
 
@@ -89,7 +90,7 @@ const ProtectedRoute = ({ children, requiredPermission, superAdminOnly = false }
 // Wrapper to debug navigation
 const DebugNavigation = ({ children }) => {
   const location = useLocation();
-  const { userPermissions } = useUser(); // Use UserContext
+  const { userPermissions } = useUser();
 
   useEffect(() => {
     console.log('DebugNavigation: Current route:', location.pathname);
@@ -206,10 +207,16 @@ const App = () => {
               <Route
                 path="domain-and-hosting"
                 element={
-                  <ProtectedRoute requiredPermission="domains">
-                    <ProtectedRoute requiredPermission="hosting">
-                      <DomainAndHosting />
-                    </ProtectedRoute>
+                  <ProtectedRoute requiredPermission="domain_and_hosting">
+                    <DomainAndHosting />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="domain-and-hosting/add"
+                element={
+                  <ProtectedRoute requiredPermission="domain_and_hosting">
+                    <DomainAndHostingForm />
                   </ProtectedRoute>
                 }
               />

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Tab } from '@headlessui/react';
-import { FiSearch, FiX, FiEye, FiMoreVertical } from 'react-icons/fi';
+import { FiSearch, FiX, FiEye, FiEdit, FiTrash, FiMoreVertical, FiPlus } from 'react-icons/fi';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
@@ -9,85 +9,60 @@ const DomainAndHosting = () => {
   const navigate = useNavigate();
   const [data, setData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [stats, setStats] = useState({
     total: 0,
     active: 0,
     expiring7Days: 0,
     expiring30Days: 0,
     expired: 0,
-    redemption: 0,
+    cancelled: 0,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [editForm, setEditForm] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
 
-  // Fetch domains from API
-  const fetchDomains = async () => {
-    try {
-      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/getdomains.php');
-      const data = await response.json();
-      if (data.status === 'success') {
-        return data.data.map(item => ({
-          id: item.id,
-          type: 'Domain',
-          name: item.domainName,
-          ownerEmail: item.contact?.email1 || '',
-          owner: `${item.owner?.firstName || ''} ${item.owner?.lastName || ''}`.trim(),
-          hostingType: null,
-          dates: { expiryDate: item.dates?.expiryDate || '' },
-        }));
-      } else {
-        throw new Error(data.message || 'Failed to fetch domains');
-      }
-    } catch (err) {
-      throw new Error('Network error occurred while fetching domains');
-    }
-  };
-
-  // Fetch hosting from API
-  const fetchHosting = async () => {
-    try {
-      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/gethosting.php');
-      const data = await response.json();
-      if (data.status === 'success') {
-        return data.data.map(item => ({
-          id: item.id,
-          type: 'Hosting',
-          name: item.hosted_domain,
-          ownerEmail: item.primary_email || '',
-          owner: `${item.owner_first_name || ''} ${item.owner_last_name || ''}`.trim(),
-          hostingType: item.hosting_type || 'N/A',
-          dates: { expiryDate: item.expiry_date || '' },
-        }));
-      } else {
-        throw new Error(data.message || 'Failed to fetch hosting');
-      }
-    } catch (err) {
-      throw new Error('Network error occurred while fetching hosting');
-    }
-  };
-
-  // Fetch both domains and hosting data
+  // Fetch data
   const fetchData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const [domains, hosting] = await Promise.all([fetchDomains(), fetchHosting()]);
-      const combinedData = [...domains, ...hosting].sort((a, b) => 
-        a.name.localeCompare(b.name)
-      );
-      setData(combinedData);
-      calculateStats(combinedData);
-      setFilteredData(combinedData);
+      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/getdomainandhosting.php');
+      const result = await response.json();
+      if (result.status === 'success') {
+        const formattedData = result.data.map(item => ({
+          id: item.id,
+          planName: item.planName,
+          type: item.type,
+          package: item.package,
+          cost: item.cost,
+          currency: item.currency || 'USD',
+          status: item.status,
+          cycle: item.cycle,
+          nextDueDate: item.nextDueDate,
+          domain: item.domain,
+          customer: `${item.customer.firstName} ${item.customer.lastName}`.trim(),
+          customerEmail: item.customer.email,
+          customerPhone: item.customer.phone,
+          startDate: item.startDate,
+          method: item.method,
+        }));
+        setData(formattedData);
+        setFilteredData(formattedData);
+        calculateStats(formattedData);
+      } else {
+        throw new Error(result.message || 'Failed to fetch domain and hosting packages');
+      }
     } catch (err) {
-      setError(err.message || 'Failed to fetch data');
-      toast.error(err.message || 'Failed to fetch data');
-      console.error('Error fetching data:', err);
+      setError(err.message || 'Network error occurred while fetching packages');
+      toast.error(err.message || 'Failed to fetch domain and hosting packages');
+      console.error('Fetch error:', err);
     } finally {
       setLoading(false);
     }
@@ -97,7 +72,7 @@ const DomainAndHosting = () => {
     fetchData();
   }, []);
 
-  // Calculate statistics
+  // Calculate statistics for tabs
   const calculateStats = (data) => {
     const now = new Date();
     const sevenDaysFromNow = new Date(now);
@@ -109,21 +84,21 @@ const DomainAndHosting = () => {
     let expiring7Days = 0;
     let expiring30Days = 0;
     let expiredCount = 0;
-    let redemptionCount = 0;
+    let cancelledCount = 0;
 
     data.forEach((item) => {
-      const expiryDate = new Date(item.dates.expiryDate);
-      const daysSinceExpiry = Math.floor((now - expiryDate) / (1000 * 60 * 60 * 24));
+      const dueDate = new Date(item.nextDueDate);
+      const daysSinceDue = Math.floor((now - dueDate) / (1000 * 60 * 60 * 24));
 
-      if (daysSinceExpiry > 30) {
-        redemptionCount++;
-      } else if (daysSinceExpiry > 0) {
+      if (item.status === 'Cancelled') {
+        cancelledCount++;
+      } else if (daysSinceDue > 0) {
         expiredCount++;
-      } else if (expiryDate <= sevenDaysFromNow && expiryDate > now) {
+      } else if (dueDate <= sevenDaysFromNow && dueDate > now) {
         expiring7Days++;
-      } else if (expiryDate <= thirtyDaysFromNow && expiryDate > sevenDaysFromNow) {
+      } else if (dueDate <= thirtyDaysFromNow && dueDate > sevenDaysFromNow) {
         expiring30Days++;
-      } else if (expiryDate > now) {
+      } else if (dueDate > now) {
         activeCount++;
       }
     });
@@ -134,33 +109,34 @@ const DomainAndHosting = () => {
       expiring7Days,
       expiring30Days,
       expired: expiredCount,
-      redemption: redemptionCount,
+      cancelled: cancelledCount,
     });
   };
 
   // Determine status dynamically
-  const getStatus = (expiryDate) => {
+  const getStatus = (nextDueDate, status) => {
+    if (status === 'Cancelled') {
+      return { text: 'Cancelled', color: 'bg-gray-100 text-gray-800' };
+    }
     const now = new Date();
     const sevenDaysFromNow = new Date(now);
     sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
     const thirtyDaysFromNow = new Date(now);
     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-    const expDate = new Date(expiryDate);
-    const daysSinceExpiry = Math.floor((now - expDate) / (1000 * 60 * 60 * 24));
+    const dueDate = new Date(nextDueDate);
+    const daysSinceDue = Math.floor((now - dueDate) / (1000 * 60 * 60 * 24));
 
-    if (daysSinceExpiry > 30) {
-      return { text: 'Redemption', color: 'bg-red-100 text-red-800' };
-    } else if (daysSinceExpiry > 0) {
+    if (daysSinceDue > 0) {
       return { text: 'Expired', color: 'bg-yellow-100 text-yellow-800' };
-    } else if (expDate <= sevenDaysFromNow && expDate > now) {
+    } else if (dueDate <= sevenDaysFromNow && dueDate > now) {
       return { text: 'Expiring Soon', color: 'bg-orange-100 text-orange-800' };
-    } else if (expDate <= thirtyDaysFromNow && expDate > sevenDaysFromNow) {
+    } else if (dueDate <= thirtyDaysFromNow && dueDate > sevenDaysFromNow) {
       return { text: 'Expiring Soon', color: 'bg-orange-100 text-orange-800' };
     }
     return { text: 'Active', color: 'bg-green-100 text-green-800' };
   };
 
-  // Filter data based on selected tab and search query
+  // Filter data based on selected tab
   const filterData = (tabIndex) => {
     const now = new Date();
     const sevenDaysFromNow = new Date(now);
@@ -168,42 +144,42 @@ const DomainAndHosting = () => {
     const thirtyDaysFromNow = new Date(now);
     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
-    let filtered = data;
+    let filtered = [];
     switch (tabIndex) {
-      case 0: // All
+      case 0: // All Services
         filtered = data;
         break;
       case 1: // Active
         filtered = data.filter((item) => {
-          const expiryDate = new Date(item.dates.expiryDate);
-          return expiryDate > now;
+          const dueDate = new Date(item.nextDueDate);
+          return dueDate > now && item.status !== 'Cancelled';
         });
         break;
       case 2: // Expiring in 7 Days
         filtered = data.filter((item) => {
-          const expiryDate = new Date(item.dates.expiryDate);
-          return expiryDate <= sevenDaysFromNow && expiryDate > now;
+          const dueDate = new Date(item.nextDueDate);
+          return dueDate <= sevenDaysFromNow && dueDate > now && item.status !== 'Cancelled';
         });
         break;
       case 3: // Expiring in 30 Days
         filtered = data.filter((item) => {
-          const expiryDate = new Date(item.dates.expiryDate);
-          return expiryDate <= thirtyDaysFromNow && expiryDate > sevenDaysFromNow;
+          const dueDate = new Date(item.nextDueDate);
+          return (
+            dueDate <= thirtyDaysFromNow &&
+            dueDate > sevenDaysFromNow &&
+            item.status !== 'Cancelled'
+          );
         });
         break;
       case 4: // Expired
         filtered = data.filter((item) => {
-          const expiryDate = new Date(item.dates.expiryDate);
-          const daysSinceExpiry = Math.floor((now - expiryDate) / (1000 * 60 * 60 * 24));
-          return daysSinceExpiry > 0 && daysSinceExpiry <= 30;
+          const dueDate = new Date(item.nextDueDate);
+          const daysSinceDue = Math.floor((now - dueDate) / (1000 * 60 * 60 * 24));
+          return daysSinceDue > 0 && item.status !== 'Cancelled';
         });
         break;
-      case 5: // Redemption
-        filtered = data.filter((item) => {
-          const expiryDate = new Date(item.dates.expiryDate);
-          const daysSinceExpiry = Math.floor((now - expiryDate) / (1000 * 60 * 60 * 24));
-          return daysSinceExpiry > 30;
-        });
+      case 5: // Cancelled
+        filtered = data.filter((item) => item.status === 'Cancelled');
         break;
       default:
         filtered = data;
@@ -213,9 +189,9 @@ const DomainAndHosting = () => {
     if (searchQuery) {
       filtered = filtered.filter(
         (item) =>
-          item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          item.ownerEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          item.owner.toLowerCase().includes(searchQuery.toLowerCase())
+          item.planName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.domain.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.customer.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
 
@@ -223,10 +199,10 @@ const DomainAndHosting = () => {
     setCurrentPage(1); // Reset to first page when filtering
   };
 
-  // Handle search input
+  // Handle search
   const handleSearch = (e) => {
     setSearchQuery(e.target.value);
-    filterData(0); // Reset to "All" tab when searching
+    filterData(0); // Reset to "All Services" tab when searching
   };
 
   // Format date to DD/MM/YYYY for display
@@ -237,11 +213,199 @@ const DomainAndHosting = () => {
       .padStart(2, '0')}/${date.getFullYear()}`;
   };
 
+  // Format date for input fields (YYYY-MM-DD)
+  const formatDateForInput = (dateString) => {
+    const date = new Date(dateString);
+    return date.toISOString().split('T')[0];
+  };
+
   // Handle View action
   const handleView = (item) => {
     setSelectedItem(item);
     setShowModal(true);
+    setShowEditModal(false);
     setDropdownOpen(null);
+  };
+
+  // Handle Edit action
+  const handleEdit = (item) => {
+    setEditForm({
+      id: item.id,
+      planName: item.planName,
+      type: item.type,
+      package: item.package,
+      cost: item.cost,
+      currency: item.currency || 'USD',
+      status: item.status,
+      cycle: item.cycle,
+      nextDueDate: formatDateForInput(item.nextDueDate),
+      domain: item.domain,
+      customer: {
+        firstName: item.customer.split(' ')[0] || '',
+        lastName: item.customer.split(' ').slice(1).join(' ') || '',
+        email: item.customerEmail,
+        phone: item.customerPhone || '',
+      },
+      startDate: formatDateForInput(item.startDate),
+      method: item.method || '',
+    });
+    setSelectedItem(item);
+    setShowEditModal(true);
+    setShowModal(false);
+    setDropdownOpen(null);
+  };
+
+  // Handle Edit form changes
+  const handleEditChange = (e, field, subField = null) => {
+    const { value } = e.target;
+    setEditForm((prev) => {
+      if (subField) {
+        return {
+          ...prev,
+          [field]: {
+            ...prev[field],
+            [subField]: value,
+          },
+        };
+      }
+      return {
+        ...prev,
+        [field]: value,
+      };
+    });
+  };
+
+  // Handle Edit submission
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    await editPackage(editForm);
+  };
+
+  // Edit package via API
+  const editPackage = async (pkg) => {
+    setLoading(true);
+    try {
+      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/updatedomainandhosting.php', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: pkg.id,
+          planName: pkg.planName,
+          type: pkg.type,
+          package: pkg.package,
+          cost: parseFloat(pkg.cost),
+          currency: pkg.currency,
+          status: pkg.status,
+          cycle: pkg.cycle,
+          nextDueDate: pkg.nextDueDate,
+          domain: pkg.domain,
+          customer: pkg.customer,
+          startDate: pkg.startDate,
+          method: pkg.method,
+        }),
+      });
+      const result = await response.json();
+      if (result.status === 'success') {
+        toast.success(result.message || 'Updated successfully');
+        setData((prev) =>
+          prev.map((item) =>
+            item.id === pkg.id
+              ? {
+                  ...item,
+                  planName: pkg.planName,
+                  type: pkg.type,
+                  package: pkg.package,
+                  cost: parseFloat(pkg.cost),
+                  currency: pkg.currency,
+                  status: pkg.status,
+                  cycle: pkg.cycle,
+                  nextDueDate: pkg.nextDueDate,
+                  domain: pkg.domain,
+                  customer: `${pkg.customer.firstName} ${pkg.customer.lastName}`.trim(),
+                  customerEmail: pkg.customer.email,
+                  customerPhone: pkg.customer.phone,
+                  startDate: pkg.startDate,
+                  method: pkg.method,
+                }
+              : item
+          )
+        );
+        setFilteredData((prev) =>
+          prev.map((item) =>
+            item.id === pkg.id
+              ? {
+                  ...item,
+                  planName: pkg.planName,
+                  type: pkg.type,
+                  package: pkg.package,
+                  cost: parseFloat(pkg.cost),
+                  currency: pkg.currency,
+                  status: pkg.status,
+                  cycle: pkg.cycle,
+                  nextDueDate: pkg.nextDueDate,
+                  domain: pkg.domain,
+                  customer: `${pkg.customer.firstName} ${pkg.customer.lastName}`.trim(),
+                  customerEmail: pkg.customer.email,
+                  customerPhone: pkg.customer.phone,
+                  startDate: pkg.startDate,
+                  method: pkg.method,
+                }
+              : item
+          )
+        );
+        calculateStats(data);
+        setShowEditModal(false);
+      } else {
+        toast.error(result.message || 'Failed to update');
+      }
+    } catch (err) {
+      toast.error('Failed to update');
+      console.error('Update error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle Delete action
+  const handleDelete = (item) => {
+    if (window.confirm('Are you sure you want to delete this item?')) {
+      deletePackage(item.id);
+    }
+    setDropdownOpen(null);
+  };
+
+  // Delete package via API
+  const deletePackage = async (id) => {
+    setLoading(true);
+    try {
+      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/deletedomainandhosting.php', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id }), // Send id in the request body
+      });
+      const result = await response.json();
+      if (result.status === 'success') {
+        toast.success(result.message || 'Package deleted successfully');
+        setData((prev) => prev.filter((item) => item.id !== id));
+        setFilteredData((prev) => prev.filter((item) => item.id !== id));
+        calculateStats(data.filter((item) => item.id !== id));
+      } else {
+        toast.error(result.message || 'Failed to delete package');
+      }
+    } catch (err) {
+      toast.error('Failed to delete package');
+      console.error('Delete error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle dropdown toggle
+  const handleDropdownToggle = (id, e) => {
+    e.stopPropagation();
+    setDropdownOpen(dropdownOpen === id ? null : id);
   };
 
   // Pagination logic
@@ -291,12 +455,6 @@ const DomainAndHosting = () => {
     return pageNumbers;
   };
 
-  // Handle dropdown toggle
-  const handleDropdownToggle = (id, e) => {
-    e.stopPropagation();
-    setDropdownOpen(dropdownOpen === id ? null : id);
-  };
-
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <ToastContainer
@@ -314,7 +472,13 @@ const DomainAndHosting = () => {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Domain & Hosting</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Domain and Hosting Packages</h1>
+          <button
+            onClick={() => navigate('/domain-and-hosting/add')}
+            className="mt-4 md:mt-0 bg-indigo-900 text-white font-medium rounded-md text-xs px-4 py-2 hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            + Add Package
+          </button>
         </div>
 
         {/* Search */}
@@ -327,10 +491,10 @@ const DomainAndHosting = () => {
               />
               <input
                 type="text"
-                placeholder="Search domains or hosting..."
+                placeholder="Search packages..."
                 value={searchQuery}
                 onChange={handleSearch}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
@@ -347,7 +511,7 @@ const DomainAndHosting = () => {
                   }`
                 }
               >
-                All ({stats.total})
+                All Services ({stats.total})
               </Tab>
               <Tab
                 className={({ selected }) =>
@@ -402,7 +566,7 @@ const DomainAndHosting = () => {
                   }`
                 }
               >
-                Redemption ({stats.redemption})
+                Cancelled ({stats.cancelled})
               </Tab>
             </Tab.List>
 
@@ -420,10 +584,10 @@ const DomainAndHosting = () => {
                             />
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Name
+                            Customer
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Type
+                            Package
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Status
@@ -432,72 +596,96 @@ const DomainAndHosting = () => {
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {currentItems.map((item) => {
-                          const status = getStatus(item.dates.expiryDate);
-                          return (
-                            <tr key={item.id}>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <input
-                                  type="checkbox"
-                                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                                />
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex items-center">
-                                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-medium">
-                                    {item.type.charAt(0)}
-                                  </div>
-                                  <div className="ml-4">
-                                    <div className="text-sm font-medium text-gray-900">
-                                      {item.name}
+                        {currentItems.length > 0 ? (
+                          currentItems.map((item) => {
+                            const status = getStatus(item.nextDueDate, item.status);
+                            return (
+                              <tr key={item.id}>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                  />
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center">
+                                    <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-medium">
+                                      {item.customer.charAt(0)}
                                     </div>
-                                    <div className="text-sm text-gray-500">
-                                      {item.ownerEmail}
-                                    </div>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {item.type}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span
-                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status.color}`}
-                                >
-                                  {status.text}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <div className="relative inline-block text-left">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => handleDropdownToggle(item.id, e)}
-                                    className="focus:outline-none"
-                                  >
-                                    <FiMoreVertical
-                                      className="text-gray-400 cursor-pointer hover:text-gray-600"
-                                      size={16}
-                                    />
-                                  </button>
-                                  {dropdownOpen === item.id && (
-                                    <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
-                                      <div className="py-1" role="menu" aria-orientation="vertical">
-                                        <button
-                                          onClick={() => handleView(item)}
-                                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
-                                          role="menuitem"
-                                        >
-                                          <FiEye className="mr-2" size={16} />
-                                          View Details
-                                        </button>
+                                    <div className="ml-4">
+                                      <div className="text-sm font-medium text-gray-900">
+                                        {item.customer}
+                                      </div>
+                                      <div className="text-sm text-gray-500">
+                                        {item.customerEmail}
                                       </div>
                                     </div>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {item.package}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span
+                                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status.color}`}
+                                  >
+                                    {status.text}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                  <div className="relative inline-block text-left">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => handleDropdownToggle(item.id, e)}
+                                      className="focus:outline-none"
+                                    >
+                                      <FiMoreVertical
+                                        className="text-gray-400 cursor-pointer hover:text-gray-600"
+                                        size={16}
+                                      />
+                                    </button>
+                                    {dropdownOpen === item.id && (
+                                      <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
+                                        <div className="py-1" role="menu" aria-orientation="vertical">
+                                          <button
+                                            onClick={() => handleView(item)}
+                                            className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                                            role="menuitem"
+                                          >
+                                            <FiEye className="mr-2" size={16} />
+                                            View Details
+                                          </button>
+                                          <button
+                                            onClick={() => handleEdit(item)}
+                                            className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                                            role="menuitem"
+                                          >
+                                            <FiEdit className="mr-2" size={16} />
+                                            Edit Package
+                                          </button>
+                                          <button
+                                            onClick={() => handleDelete(item)}
+                                            className="flex items-center px-4 py-2 text-sm text-red-600 hover:bg-gray-100 w-full text-left"
+                                            role="menuitem"
+                                          >
+                                            <FiTrash className="mr-2" size={16} />
+                                            Delete Package
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        ) : (
+                          <tr>
+                            <td colSpan="5" className="px-6 py-4 text-center text-sm text-gray-500">
+                              No packages found.
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -507,47 +695,47 @@ const DomainAndHosting = () => {
           </Tab.Group>
         </div>
 
-         {/* Pagination */}
-                  <div className="flex flex-col md:flex-row items-center justify-between mt-6 px-6">
-                    <div className="text-xs text-gray-500 mb-4 md:mb-0">
-                      Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredData.length)} of {filteredData.length} records
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => paginate(currentPage - 1)}
-                        disabled={currentPage === 1}
-                        className={`px-3 py-1 rounded-md text-xs ${currentPage === 1 ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-indigo-900 text-white hover:bg-indigo-600'}`}
-                      >
-                        Prev
-                      </button>
-                      <div className="flex space-x-1">
-                        {getPageNumbers().map((number, index) => (
-                          <button
-                            key={index}
-                            onClick={() => typeof number === 'number' ? paginate(number) : null}
-                            className={`px-3 py-1 rounded-md text-xs ${currentPage === number ? 'bg-indigo-900 text-white' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'} ${typeof number !== 'number' ? 'cursor-default' : ''}`}
-                            disabled={number === '...'}
-                          >
-                            {number}
-                          </button>
-                        ))}
-                      </div>
-                      <button
-                        onClick={() => paginate(currentPage + 1)}
-                        disabled={currentPage === totalPages}
-                        className={`px-3 py-1 rounded-md text-xs ${currentPage === totalPages ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-indigo-900 text-white hover:bg-indigo-600'}`}
-                      >
-                        Next
-                      </button>
-                    </div>
-                  </div>
+        {/* Pagination */}
+        <div className="flex flex-col md:flex-row items-center justify-between mt-6 px-6">
+          <div className="text-xs text-gray-500 mb-4 md:mb-0">
+            Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredData.length)} of {filteredData.length} records
+          </div>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => paginate(currentPage - 1)}
+              disabled={currentPage === 1}
+              className={`px-3 py-1 rounded-md text-xs ${currentPage === 1 ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-indigo-900 text-white hover:bg-indigo-600'}`}
+            >
+              Prev
+            </button>
+            <div className="flex space-x-1">
+              {getPageNumbers().map((number, index) => (
+                <button
+                  key={index}
+                  onClick={() => typeof number === 'number' ? paginate(number) : null}
+                  className={`px-3 py-1 rounded-md text-xs ${currentPage === number ? 'bg-indigo-900 text-white' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'} ${typeof number !== 'number' ? 'cursor-default' : ''}`}
+                  disabled={number === '...'}
+                >
+                  {number}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => paginate(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className={`px-3 py-1 rounded-md text-xs ${currentPage === totalPages ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-indigo-900 text-white hover:bg-indigo-600'}`}
+            >
+              Next
+            </button>
+          </div>
+        </div>
 
         {/* View Modal */}
         {showModal && selectedItem && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-lg w-full max-w-md">
-              <div className="bg-indigo-800 text-white p-3 rounded-t-lg flex justify-between items-center">
-                <h2 className="text-xl font-bold">Item Details</h2>
+              <div className="bg-indigo-900 text-white p-3 rounded-t-lg flex justify-between items-center">
+                <h2 className="text-xl font-bold">Package Details</h2>
                 <button
                   onClick={() => setShowModal(false)}
                   className="text-white hover:text-gray-200 focus:outline-none"
@@ -555,15 +743,16 @@ const DomainAndHosting = () => {
                   <FiX size={20} />
                 </button>
               </div>
-              <div className="bg-indigo-800 text-white px-3 pb-3 flex items-center">
+              <div className="bg-indigo-900 text-white px-3 pb-3 flex items-center">
                 <span
                   className={`px-3 py-1 rounded-full text-sm font-medium ${getStatus(
-                    selectedItem.dates.expiryDate
+                    selectedItem.nextDueDate,
+                    selectedItem.status
                   ).color}`}
                 >
-                  {getStatus(selectedItem.dates.expiryDate).text}
+                  {getStatus(selectedItem.nextDueDate, selectedItem.status).text}
                 </span>
-                <span className="text-lg ml-2">{selectedItem.name}</span>
+                <span className="text-lg ml-2">{selectedItem.planName}</span>
               </div>
               <div className="p-4">
                 <div className="flex items-start mb-4">
@@ -578,21 +767,29 @@ const DomainAndHosting = () => {
                   </div>
                   <div className="flex-1">
                     <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                      Item Information
+                      Package Information
                     </h3>
                     <div className="grid grid-cols-2 gap-y-2 text-sm">
                       <div className="text-gray-500">ID</div>
                       <div className="text-right font-medium">{selectedItem.id}</div>
-                      <div className="text-gray-500">Type</div>
-                      <div className="text-right font-medium">{selectedItem.type}</div>
-                      <div className="text-gray-500">Hosting Type</div>
+                      <div className="text-gray-500">Domain</div>
+                      <div className="text-right font-medium">{selectedItem.domain}</div>
+                      <div className="text-gray-500">Package</div>
+                      <div className="text-right font-medium">{selectedItem.package}</div>
+                      <div className="text-gray-500">Cost</div>
+                      <div className="text-right font-medium">{selectedItem.currency} {selectedItem.cost}</div>
+                      <div className="text-gray-500">Cycle</div>
+                      <div className="text-right font-medium">{selectedItem.cycle}</div>
+                      <div className="text-gray-500">Start Date</div>
                       <div className="text-right font-medium">
-                        {selectedItem.hostingType || 'N/A'}
+                        {formatDate(selectedItem.startDate)}
                       </div>
-                      <div className="text-gray-500">Expiry Date</div>
+                      <div className="text-gray-500">Next Due Date</div>
                       <div className="text-right font-medium">
-                        {formatDate(selectedItem.dates.expiryDate)}
+                        {formatDate(selectedItem.nextDueDate)}
                       </div>
+                      <div className="text-gray-500">Payment Method</div>
+                      <div className="text-right font-medium">{selectedItem.method}</div>
                     </div>
                   </div>
                 </div>
@@ -612,14 +809,18 @@ const DomainAndHosting = () => {
                   </div>
                   <div className="flex-1">
                     <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                      Owner Information
+                      Customer Information
                     </h3>
                     <div className="grid grid-cols-2 gap-y-2 text-sm">
                       <div className="text-gray-500">Name</div>
-                      <div className="text-right font-medium">{selectedItem.owner}</div>
+                      <div className="text-right font-medium">{selectedItem.customer}</div>
                       <div className="text-gray-500">Email</div>
                       <div className="text-right font-medium truncate">
-                        {selectedItem.ownerEmail}
+                        {selectedItem.customerEmail}
+                      </div>
+                      <div className="text-gray-500">Phone</div>
+                      <div className="text-right font-medium">
+                        {selectedItem.customerPhone}
                       </div>
                     </div>
                   </div>
@@ -628,7 +829,7 @@ const DomainAndHosting = () => {
               <div className="p-3 rounded-b-lg">
                 <button
                   onClick={() => setShowModal(false)}
-                  className="w-full py-2 bg-indigo-800 text-white font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-sm"
+                  className="w-full py-2 bg-indigo-900 text-white font-medium rounded-md hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 text-xs"
                 >
                   Close Details
                 </button>
@@ -637,10 +838,225 @@ const DomainAndHosting = () => {
           </div>
         )}
 
+        {/* Edit Modal */}
+        {showEditModal && editForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+              <div className="bg-indigo-900 text-white p-3 rounded-t-lg flex justify-between items-center">
+                <h2 className="text-xl font-bold">Edit Package</h2>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="text-white hover:text-gray-200 focus:outline-none"
+                >
+                  <FiX size={20} />
+                </button>
+              </div>
+              <form onSubmit={handleEditSubmit}>
+                <div className="p-6 space-y-6">
+                  {/* Package Info */}
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                      Package Information
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Plan Name</label>
+                        <input
+                          type="text"
+                          value={editForm.planName}
+                          onChange={(e) => handleEditChange(e, 'planName')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Domain</label>
+                        <input
+                          type="text"
+                          value={editForm.domain}
+                          onChange={(e) => handleEditChange(e, 'domain')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Package</label>
+                        <input
+                          type="text"
+                          value={editForm.package}
+                          onChange={(e) => handleEditChange(e, 'package')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          disabled
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Status</label>
+                        <select
+                          value={editForm.status}
+                          onChange={(e) => handleEditChange(e, 'status')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        >
+                          <option value="Active">Active</option>
+                          <option value="Expiring Soon">Expiring Soon</option>
+                          <option value="Expired">Expired</option>
+                          <option value="Cancelled">Cancelled</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Customer Info */}
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                      Customer Information
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">First Name</label>
+                        <input
+                          type="text"
+                          value={editForm.customer.firstName}
+                          onChange={(e) => handleEditChange(e, 'customer', 'firstName')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Last Name</label>
+                        <input
+                          type="text"
+                          value={editForm.customer.lastName}
+                          onChange={(e) => handleEditChange(e, 'customer', 'lastName')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Email</label>
+                        <input
+                          type="email"
+                          value={editForm.customer.email}
+                          onChange={(e) => handleEditChange(e, 'customer', 'email')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Phone (optional)</label>
+                        <input
+                          type="tel"
+                          value={editForm.customer.phone}
+                          onChange={(e) => handleEditChange(e, 'customer', 'phone')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Package Plan */}
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                      Package Plan
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Cost</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editForm.cost}
+                          onChange={(e) => handleEditChange(e, 'cost')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          disabled
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Currency</label>
+                        <input
+                          type="text"
+                          value={editForm.currency}
+                          onChange={(e) => handleEditChange(e, 'currency')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          disabled
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Billing Cycle</label>
+                        <input
+                          type="text"
+                          value={editForm.cycle}
+                          onChange={(e) => handleEditChange(e, 'cycle')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          disabled
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Payment Method (optional)</label>
+                        <input
+                          type="text"
+                          value={editForm.method}
+                          onChange={(e) => handleEditChange(e, 'method')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          disabled
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dates */}
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                      Package Dates
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Start Date</label>
+                        <input
+                          type="date"
+                          value={editForm.startDate}
+                          onChange={(e) => handleEditChange(e, 'startDate')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700">Next Due Date</label>
+                        <input
+                          type="date"
+                          value={editForm.nextDueDate}
+                          onChange={(e) => handleEditChange(e, 'nextDueDate')}
+                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-3 rounded-b-lg flex justify-end space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowEditModal(false)}
+                    className="py-2 px-4 bg-gray-200 text-gray-700 font-medium rounded-md text-xs hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="py-2 px-4 bg-indigo-900 text-white font-medium rounded-md text-xs hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
         {/* Loading and Error States */}
         {loading && (
           <div className="mt-8 text-center">
-            <div className="inline-flex items-center px-4 py-2 font-semibold leading-6 text-sm shadow rounded-md text-white bg-indigo-900 transition ease-in-out duration-150 cursor-not-allowed">
+            <div className="inline-flex items-center px-4 py-2 font-semibold leading-6 text-xs shadow rounded-md text-white bg-indigo-900 transition ease-in-out duration-150 cursor-not-allowed">
               <svg
                 className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
                 xmlns="http://www.w3.org/2000/svg"
@@ -658,8 +1074,7 @@ const DomainAndHosting = () => {
                 <path
                   className="opacity-75"
                   fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0           
-                    5.373 0 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                 ></path>
               </svg>
               Processing...
