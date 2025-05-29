@@ -1012,11 +1012,14 @@ const Hosting = () => {
                     onChange={handleEditChange}
                     required
                     placeholder="e.g., Basic"
-                    className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full mt-1 p-2 border bg-gray-100 rounded-md px-2 py-1.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                   />
                   {formErrors.package && (
                     <p className="mt-1 text-xs text-red-500">{formErrors.package}</p>
                   )}
+                   <p className="text-xs text-gray-500 mt-1">
+                  To change the package, please contact customer service.
+                </p>
                 </div>
 
                 <div className="mt-4 w-full justify-between flex gap-5">

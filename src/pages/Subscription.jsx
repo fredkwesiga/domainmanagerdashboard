@@ -756,142 +756,260 @@ const Subscription = () => {
         </div>
 
         {/* View Modal */}
-        {showModal && selectedSubscription && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-lg w-full max-w-md">
-              <div className="bg-indigo-900 text-white p-3 rounded-t-lg flex justify-between items-center">
-                <h2 className="text-xl font-bold">Service Details</h2>
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="text-white hover:text-gray-200 focus:outline-none"
-                >
-                  <FiX size={20} />
-                </button>
+       {showEditModal && editForm && (
+  <div className="fixed inset-0 bg-gray-600 bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50">
+    <div className="bg-white p-6 rounded-lg shadow-lg w-[600px] max-h-[90vh] overflow-y-auto">
+      <h2 className="text-lg mb-4">Edit Subscription</h2>
+      <button
+        onClick={() => setShowEditModal(false)}
+        className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 focus:outline-none"
+      >
+        <FiX size={20} />
+      </button>
+      <form onSubmit={handleEditSubmit}>
+        <div className="space-y-6">
+          {/* Subscription Information */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+              Subscription Information
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Service Name</label>
+                <input
+                  type="text"
+                  value={editForm.planName}
+                  onChange={(e) => handleEditChange(e, 'planName')}
+                  className="w-full mt-1 p-2 border bg-gray-100 rounded-md px-2 py-1.5 text-xs font-semibold text-gray-700"
+                  disabled
+                />
               </div>
-              <div className="bg-indigo-900 text-white px-3 pb-3 flex items-center">
-                <span
-                  className={`px-3 py-1 rounded-full text-sm font-medium ${getStatus(
-                    selectedSubscription.nextDueDate,
-                    selectedSubscription.status
-                  ).color}`}
-                >
-                  {getStatus(selectedSubscription.nextDueDate, selectedSubscription.status).text}
-                </span>
-                <span className="text-lg ml-2">{selectedSubscription.planName}</span>
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Domain</label>
+                <input
+                  type="text"
+                  value={editForm.domain}
+                  onChange={(e) => handleEditChange(e, 'domain')}
+                  className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  required
+                />
               </div>
-              <div className="p-4">
-                <div className="flex items-start mb-4">
-                  <div className="bg-indigo-100 p-2 rounded-lg mr-3">
-                    <svg
-                      className="w-5 h-5 text-indigo-700"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6zM16 7a1 1 0 10-2 0v1h-1a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1V7z" />
-                    </svg>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                      Service Information
-                    </h3>
-                    <div className="grid grid-cols-2 gap-y-2 text-sm">
-                      <div className="text-gray-500">ID</div>
-                      <div className="text-right font-medium">{selectedSubscription.id}</div>
-                      <div className="text-gray-500">Domain</div>
-                      <div className="text-right font-medium">{selectedSubscription.domain}</div>
-                      <div className="text-gray-500">Cycle</div>
-                      <div className="text-right font-medium">{selectedSubscription.cycle}</div>
-                      <div className="text-gray-500">Start Date</div>
-                      <div className="text-right font-medium">
-                        {formatDate(selectedSubscription.startDate)}
-                      </div>
-                      <div className="text-gray-500">Next Due Date</div>
-                      <div className="text-right font-medium">
-                        {formatDate(selectedSubscription.nextDueDate)}
-                      </div>
-                      <div className="text-gray-500">Payment Method</div>
-                      <div className="text-right font-medium">{selectedSubscription.method}</div>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-start">
-                  <div className="bg-purple-100 p-2 rounded-lg mr-3">
-                    <svg
-                      className="w-5 h-5 text-purple-700"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                      Customer Information
-                    </h3>
-                    <div className="grid grid-cols-2 gap-y-2 text-sm">
-                      <div className="text-gray-500">Name</div>
-                      <div className="text-right font-medium">{selectedSubscription.customer}</div>
-                      <div className="text-gray-500">Email</div>
-                      <div className="text-right font-medium truncate">
-                        {selectedSubscription.customerEmail}
-                      </div>
-                      <div className="text-gray-500">Phone</div>
-                      <div className="text-right font-medium">
-                        {selectedSubscription.customerPhone}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="p-3 rounded-b-lg">
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="w-full py-2 bg-indigo-900 text-white font-medium rounded-md hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 text-xs"
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Subscription Type</label>
+                <select
+                  value={editForm.type}
+                  onChange={(e) => handleEditChange(e, 'type')}
+                  className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  required
                 >
-                  Close Details
-                </button>
+                  {subscriptionTypeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Status</label>
+                <select
+                  value={editForm.status}
+                  onChange={(e) => handleEditChange(e, 'status')}
+                  className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  required
+                >
+                  {statusOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>
-        )}
+
+          {/* Customer Information */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+              Customer Information
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700">First Name</label>
+                <input
+                  type="text"
+                  value={editForm.customer.firstName}
+                  onChange={(e) => handleEditChange(e, 'customer', 'firstName')}
+                  className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Last Name</label>
+                <input
+                  type="text"
+                  value={editForm.customer.lastName}
+                  onChange={(e) => handleEditChange(e, 'customer', 'lastName')}
+                  className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Email</label>
+                <input
+                  type="email"
+                  value={editForm.customer.email}
+                  onChange={(e) => handleEditChange(e, 'customer', 'email')}
+                  className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Phone (optional)</label>
+                <input
+                  type="tel"
+                  value={editForm.customer.phone}
+                  onChange={(e) => handleEditChange(e, 'customer', 'phone')}
+                  className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Subscription Plan */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+              Subscription Plan
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Cost</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editForm.cost}
+                  onChange={(e) => handleEditChange(e, 'cost')}
+                  className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Currency</label>
+                <select
+                  value={editForm.currency}
+                  onChange={(e) => handleEditChange(e, 'currency')}
+                  className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  required
+                >
+                  {currencyOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Billing Cycle</label>
+                <select
+                  value={editForm.cycle}
+                  onChange={(e) => handleEditChange(e, 'cycle')}
+                  className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  required
+                >
+                  {billingCycleOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Payment Method (optional)</label>
+                <select
+                  value={editForm.method}
+                  onChange={(e) => handleEditChange(e, 'method')}
+                  className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                >
+                  {paymentMethodOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Subscription Dates */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+              Subscription Dates
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Start Date</label>
+                <input
+                  type="date"
+                  value={editForm.startDate}
+                  onChange={(e) => handleEditChange(e, 'startDate')}
+                  className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700">Next Due Date</label>
+                <input
+                  type="date"
+                  value={editForm.nextDueDate}
+                  onChange={(e) => handleEditChange(e, 'nextDueDate')}
+                  className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 flex justify-end space-x-2">
+          <button
+            type="button"
+            onClick={() => setShowEditModal(false)}
+            className="ml-2 bg-gray-600 text-xs font-semibold text-white px-4 py-2 rounded-md"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="bg-indigo-900 text-xs font-semibold text-white px-4 py-2 rounded-md"
+          >
+            Save
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
 
         {/* Edit Modal */}
         {showEditModal && editForm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl max-h-[80vh] overflow-y-auto">
-              <div className="bg-indigo-900 text-white p-3 rounded-t-lg flex justify-between items-center">
-                <h2 className="text-xl font-bold">Edit Subscription</h2>
-                <button
-                  onClick={() => setShowEditModal(false)}
-                  className="text-white hover:text-gray-200 focus:outline-none"
-                >
-                  <FiX size={20} />
-                </button>
-              </div>
-              <form onSubmit={handleEditSubmit}>
-                <div className="p-6 space-y-6">
-                  {/* Subscription Info */}
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg shadow-lg w-[600px]  max-h-[90vh] overflow-y-auto">
+              <h2 className="text-lg mb-2">Edit Subscription</h2>
+                <form onSubmit={handleEditSubmit}>
+                  <h3 className="text-sm mb-2 font-semibold text-gray-700 uppercase tracking-wider">
                       Subscription Information
                     </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Service Name</label>
-                        <input
+                  <div className="flex w-full justify-between gap-5">
+                    <div className="mb-4 w-full">
+                      <label className="block text-xs font-medium text-gray-700">Service Name</label>
+                      <input
                           type="text"
                           value={editForm.planName}
                           onChange={(e) => handleEditChange(e, 'planName')}
                           className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           required
                         />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Domain</label>
+                    </div>
+                    <div className="mb-4 w-full">
+                      <label className="block text-xs font-medium text-gray-700">Domain</label>                       
                         <input
                           type="text"
                           value={editForm.domain}
@@ -899,10 +1017,13 @@ const Subscription = () => {
                           className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           required
                         />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Subscription Type</label>
-                        <select
+                    </div>    
+                  </div>
+
+                  <div className="flex w-full justify-between gap-5">
+                    <div className="mb-4 w-full">
+                     <label className="block text-xs font-medium text-gray-700">Subscription Type</label>
+                      <select
                           value={editForm.type}
                           onChange={(e) => handleEditChange(e, 'type')}
                           className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -914,10 +1035,10 @@ const Subscription = () => {
                             </option>
                           ))}
                         </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Status</label>
-                        <select
+                    </div>
+                    <div className="mb-4 w-full">
+                       <label className="block text-xs font-medium text-gray-700">Status</label>                      
+                         <select
                           value={editForm.status}
                           onChange={(e) => handleEditChange(e, 'status')}
                           className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -929,18 +1050,16 @@ const Subscription = () => {
                             </option>
                           ))}
                         </select>
-                      </div>
-                    </div>
+                    </div>    
                   </div>
 
                   {/* Customer Info */}
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                  <h3 className="text-sm mb-2 font-semibold text-gray-700 uppercase tracking-wider">
                       Customer Information
                     </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">First Name</label>
+                  <div className="flex w-full justify-between gap-5">
+                    <div className="mb-4 w-full">
+                       <label className="block text-xs font-medium text-gray-700">First Name</label>
                         <input
                           type="text"
                           value={editForm.customer.firstName}
@@ -948,9 +1067,10 @@ const Subscription = () => {
                           className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           required
                         />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Last Name</label>
+                    </div>
+
+                    <div className="mb-4 w-full">
+                       <label className="block text-xs font-medium text-gray-700">Last Name</label>
                         <input
                           type="text"
                           value={editForm.customer.lastName}
@@ -958,9 +1078,13 @@ const Subscription = () => {
                           className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           required
                         />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Email</label>
+                    </div>
+
+                  </div>
+
+                  <div className="flex w-full justify-between gap-5">
+                    <div className="mb-4 w-full">
+                       <label className="block text-xs font-medium text-gray-700">Email</label>
                         <input
                           type="email"
                           value={editForm.customer.email}
@@ -968,26 +1092,27 @@ const Subscription = () => {
                           className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           required
                         />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Phone (optional)</label>
+                    </div>
+
+                    <div className="mb-4 w-full">
+                       <label className="block text-xs font-medium text-gray-700">Phone (optional)</label>
                         <input
                           type="tel"
                           value={editForm.customer.phone}
                           onChange={(e) => handleEditChange(e, 'customer', 'phone')}
                           className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
-                      </div>
                     </div>
-                  </div>
 
-                  {/* Subscription Plan */}
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                  </div>               
+
+                {/* Subscription Plan */}
+                  <h3 className="text-sm mb-2 font-semibold text-gray-700 uppercase tracking-wider">
                       Subscription Plan
                     </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
+                  
+                  <div className="flex w-full justify-between gap-5">
+                    <div className="mb-4 w-full">
                         <label className="block text-xs font-medium text-gray-700">Cost</label>
                         <input
                           type="number"
@@ -997,8 +1122,9 @@ const Subscription = () => {
                           className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           required
                         />
-                      </div>
-                      <div>
+                    </div>
+
+                    <div className="mb-4 w-full">
                         <label className="block text-xs font-medium text-gray-700">Currency</label>
                         <select
                           value={editForm.currency}
@@ -1012,8 +1138,13 @@ const Subscription = () => {
                             </option>
                           ))}
                         </select>
-                      </div>
-                      <div>
+                    </div>
+
+                  </div>
+
+
+                  <div className="flex w-full justify-between gap-5">
+                      <div className="mb-4 w-full">
                         <label className="block text-xs font-medium text-gray-700">Billing Cycle</label>
                         <select
                           value={editForm.cycle}
@@ -1027,9 +1158,9 @@ const Subscription = () => {
                             </option>
                           ))}
                         </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Payment Method (optional)</label>
+                    </div>
+                    <div className="mb-4 w-full">
+                       <label className="block text-xs font-medium text-gray-700">Payment Method (optional)</label>
                         <select
                           value={editForm.method}
                           onChange={(e) => handleEditChange(e, 'method')}
@@ -1041,18 +1172,17 @@ const Subscription = () => {
                             </option>
                           ))}
                         </select>
-                      </div>
+
                     </div>
                   </div>
 
-                  {/* Dates */}
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                <h3 className="text-sm mb-2 font-semibold text-gray-700 uppercase tracking-wider">
                       Subscription Dates
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Start Date</label>
+                </h3>
+
+                <div className="flex w-full justify-between gap-5">
+                      <div className="mb-4 w-full">
+                       <label className="block text-xs font-medium text-gray-700">Start Date</label>
                         <input
                           type="date"
                           value={editForm.startDate}
@@ -1060,8 +1190,8 @@ const Subscription = () => {
                           className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           required
                         />
-                      </div>
-                      <div>
+                    </div>
+                    <div className="mb-4 w-full">
                         <label className="block text-xs font-medium text-gray-700">Next Due Date</label>
                         <input
                           type="date"
@@ -1070,26 +1200,27 @@ const Subscription = () => {
                           className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           required
                         />
-                      </div>
+
                     </div>
                   </div>
-                </div>
-                <div className="p-3 rounded-b-lg flex justify-end space-x-2">
+
+                <div className="mt-4 w-full justify-between flex gap-5">
                   <button
                     type="button"
                     onClick={() => setShowEditModal(false)}
-                    className="py-2 px-4 bg-gray-200 text-gray-700 font-medium rounded-md text-xs hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                    className="ml-2 bg-gray-600 text-xs font-semibold text-white px-4 py-2 rounded-md w-full"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="py-2 px-4 bg-indigo-900 text-white font-medium rounded-md text-xs hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    className="bg-indigo-900 text-xs font-semibold text-white px-4 py-2 rounded-md w-full flex items-center justify-center"
                   >
                     Save Changes
                   </button>
                 </div>
               </form>
+            
             </div>
           </div>
         )}
