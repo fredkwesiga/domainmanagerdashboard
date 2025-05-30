@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Tab } from '@headlessui/react';
-import { FiSearch, FiX, FiEye, FiEdit, FiTrash, FiMoreVertical, FiPlus } from 'react-icons/fi';
+import { FiSearch, FiX, FiEye, FiEdit, FiTrash, FiMoreVertical, FiEdit2, FiTrash2 } from 'react-icons/fi';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
@@ -26,6 +26,8 @@ const DomainAndHosting = () => {
   const [editForm, setEditForm] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [showNoteInput, setShowNoteInput] = useState(false);
+  const [note, setNote] = useState('');
   const [itemsPerPage] = useState(10);
 
   // Fetch data
@@ -52,6 +54,7 @@ const DomainAndHosting = () => {
           customerPhone: item.customer.phone,
           startDate: item.startDate,
           method: item.method,
+          note: item.note || '',
         }));
         setData(formattedData);
         setFilteredData(formattedData);
@@ -221,7 +224,10 @@ const DomainAndHosting = () => {
 
   // Handle View action
   const handleView = (item) => {
-    setSelectedItem(item);
+    setSelectedItem({
+      ...item,
+      note: item.note || '',
+    });
     setShowModal(true);
     setShowEditModal(false);
     setDropdownOpen(null);
@@ -248,7 +254,10 @@ const DomainAndHosting = () => {
       },
       startDate: formatDateForInput(item.startDate),
       method: item.method || '',
+      note: item.note || '',
     });
+    setNote(item.note || '');
+    setShowNoteInput(!!item.note);
     setSelectedItem(item);
     setShowEditModal(true);
     setShowModal(false);
@@ -275,10 +284,27 @@ const DomainAndHosting = () => {
     });
   };
 
+  // Handle Note changes
+  const handleNoteChange = (e) => {
+    setNote(e.target.value);
+    setEditForm((prev) => ({
+      ...prev,
+      note: e.target.value,
+    }));
+  };
+
+  // Handle Remove Note
+  const handleRemoveNote = async () => {
+    const updatedItem = { ...selectedItem, note: '' };
+    setSelectedItem(updatedItem);
+    setNote('');
+    await editPackage({ ...editForm, note: '' });
+  };
+
   // Handle Edit submission
   const handleEditSubmit = async (e) => {
     e.preventDefault();
-    await editPackage(editForm);
+    await editPackage({ ...editForm, note });
   };
 
   // Edit package via API
@@ -302,6 +328,7 @@ const DomainAndHosting = () => {
           customer: pkg.customer,
           startDate: pkg.startDate,
           method: pkg.method,
+          note: pkg.note,
         }),
       });
       const result = await response.json();
@@ -326,6 +353,7 @@ const DomainAndHosting = () => {
                   customerPhone: pkg.customer.phone,
                   startDate: pkg.startDate,
                   method: pkg.method,
+                  note: pkg.note,
                 }
               : item
           )
@@ -349,6 +377,7 @@ const DomainAndHosting = () => {
                   customerPhone: pkg.customer.phone,
                   startDate: pkg.startDate,
                   method: pkg.method,
+                  note: pkg.note,
                 }
               : item
           )
@@ -383,7 +412,7 @@ const DomainAndHosting = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ id }), // Send id in the request body
+        body: JSON.stringify({ id }),
       });
       const result = await response.json();
       if (result.status === 'success') {
@@ -732,106 +761,259 @@ const DomainAndHosting = () => {
 
         {/* View Modal */}
         {showModal && selectedItem && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-lg w-full max-w-md">
-              <div className="bg-indigo-900 text-white p-3 rounded-t-lg flex justify-between items-center">
-                <h2 className="text-xl font-bold">Package Details</h2>
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="text-white hover:text-gray-200 focus:outline-none"
-                >
-                  <FiX size={20} />
-                </button>
-              </div>
-              <div className="bg-indigo-900 text-white px-3 pb-3 flex items-center">
-                <span
-                  className={`px-3 py-1 rounded-full text-sm font-medium ${getStatus(
-                    selectedItem.nextDueDate,
-                    selectedItem.status
-                  ).color}`}
-                >
-                  {getStatus(selectedItem.nextDueDate, selectedItem.status).text}
-                </span>
-                <span className="text-lg ml-2">{selectedItem.planName}</span>
-              </div>
-              <div className="p-4">
-                <div className="flex items-start mb-4">
-                  <div className="bg-indigo-100 p-2 rounded-lg mr-3">
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+              <div className="bg-indigo-900 p-6">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-2xl font-bold text-white">Package Details</h2>
+                  <button
+                    onClick={() => setShowModal(false)}
+                    className="text-white/80 hover:text-white transition-colors"
+                  >
                     <svg
-                      className="w-5 h-5 text-indigo-700"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6zM16 7a1 1 0 10-2 0v1h-1a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1V7z" />
-                    </svg>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                      Package Information
-                    </h3>
-                    <div className="grid grid-cols-2 gap-y-2 text-sm">
-                      <div className="text-gray-500">ID</div>
-                      <div className="text-right font-medium">{selectedItem.id}</div>
-                      <div className="text-gray-500">Domain</div>
-                      <div className="text-right font-medium">{selectedItem.domain}</div>
-                      <div className="text-gray-500">Package</div>
-                      <div className="text-right font-medium">{selectedItem.package}</div>
-                      <div className="text-gray-500">Cost</div>
-                      <div className="text-right font-medium">{selectedItem.currency} {selectedItem.cost}</div>
-                      <div className="text-gray-500">Cycle</div>
-                      <div className="text-right font-medium">{selectedItem.cycle}</div>
-                      <div className="text-gray-500">Start Date</div>
-                      <div className="text-right font-medium">
-                        {formatDate(selectedItem.startDate)}
-                      </div>
-                      <div className="text-gray-500">Next Due Date</div>
-                      <div className="text-right font-medium">
-                        {formatDate(selectedItem.nextDueDate)}
-                      </div>
-                      <div className="text-gray-500">Payment Method</div>
-                      <div className="text-right font-medium">{selectedItem.method}</div>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-start">
-                  <div className="bg-purple-100 p-2 rounded-lg mr-3">
-                    <svg
-                      className="w-5 h-5 text-purple-700"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-6 w-6"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
                     >
                       <path
-                        fillRule="evenodd"
-                        d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
-                        clipRule="evenodd"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
                       />
                     </svg>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                      Customer Information
+                  </button>
+                </div>
+                <div className="mt-2 flex items-center">
+                  <span
+                    className={`inline-flex items-center px-5 py-1 rounded-full text-xs font-medium ${getStatus(selectedItem.nextDueDate, selectedItem.status).color}`}
+                  >
+                    {getStatus(selectedItem.nextDueDate, selectedItem.status).text}
+                  </span>
+                  <span className="ml-2 text-xs text-white/90">
+                    {selectedItem.planName}
+                  </span>
+                </div>
+              </div>
+              <div className="p-6 space-y-6 max-h-[65vh] overflow-y-auto">
+                <div className="dark:bg-indigo-900 p-5 rounded-xl">
+                  <div className="flex items-center mb-3">
+                    <div className="bg-indigo-100 dark:bg-indigo-900/50 p-2 rounded-lg mr-3">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-5 w-5 text-indigo-600 dark:text-indigo-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                        />
+                      </svg>
+                    </div>
+                    <h3 className="font-semibold text-gray-800 dark:text-gray-100">
+                      Package Information
                     </h3>
-                    <div className="grid grid-cols-2 gap-y-2 text-sm">
-                      <div className="text-gray-500">Name</div>
-                      <div className="text-right font-medium">{selectedItem.customer}</div>
-                      <div className="text-gray-500">Email</div>
-                      <div className="text-right font-medium truncate">
-                        {selectedItem.customerEmail}
-                      </div>
-                      <div className="text-gray-500">Phone</div>
-                      <div className="text-right font-medium">
-                        {selectedItem.customerPhone}
-                      </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        ID
+                      </span>
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {selectedItem.id}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        Plan Name
+                      </span>
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {selectedItem.planName}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        Domain
+                      </span>
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {selectedItem.domain}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        Package
+                      </span>
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {selectedItem.package}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        Cost
+                      </span>
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {selectedItem.currency} {selectedItem.cost.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        Billing Cycle
+                      </span>
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {selectedItem.cycle}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        Payment Method
+                      </span>
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {selectedItem.method || 'N/A'}
+                      </span>
                     </div>
                   </div>
                 </div>
+                <div className="dark:bg-indigo-900 p-5 rounded-xl">
+                  <div className="flex items-center mb-3">
+                    <div className="bg-purple-100 dark:bg-purple-900/50 p-2 rounded-lg mr-3">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-5 w-5 text-purple-600 dark:text-purple-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                        />
+                      </svg>
+                    </div>
+                    <h3 className="font-semibold text-gray-800 dark:text-gray-100">
+                      Customer Information
+                    </h3>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        Name
+                      </span>
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {selectedItem.customer}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        Email
+                      </span>
+                      <a
+                        href={`mailto:${selectedItem.customerEmail}`}
+                        className="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                      >
+                        {selectedItem.customerEmail}
+                      </a>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        Phone
+                      </span>
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {selectedItem.customerPhone || 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="dark:bg-indigo-900 p-5 rounded-xl">
+                  <div className="flex items-center mb-3">
+                    <div className="bg-indigo-100 dark:bg-indigo-900/50 p-2 rounded-lg mr-3">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-5 w-5 text-indigo-600 dark:text-indigo-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                        />
+                      </svg>
+                    </div>
+                    <h3 className="font-semibold text-gray-800 dark:text-gray-100">
+                      Package Dates
+                    </h3>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        Start Date
+                      </span>
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {formatDate(selectedItem.startDate)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        Next Due Date
+                      </span>
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {formatDate(selectedItem.nextDueDate)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                {selectedItem.note && (
+                  <div className="dark:bg-yellow-900/50 p-5 rounded-xl">
+                    <div className="flex items-center mb-3">
+                      <div className="bg-yellow-100 dark:bg-yellow-900/50 p-2 rounded-lg mr-3">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-5 w-5 text-yellow-600 dark:text-yellow-400"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
+                        </svg>
+                      </div>
+                      <h3 className="font-semibold text-gray-800 dark:text-gray-100 flex items-center justify-between w-full">
+                        Note
+                        <button
+                          onClick={handleRemoveNote}
+                          className="text-red-600 hover:text-red-800 text-sm flex items-center"
+                        >
+                          <FiTrash2 className="mr-1" size={14} /> Remove
+                        </button>
+                      </h3>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                      {selectedItem.note}
+                    </p>
+                  </div>
+                )}
               </div>
-              <div className="p-3 rounded-b-lg">
+              <div className="px-6 pb-6">
                 <button
+                  type="button"
+                  className="w-full bg-indigo-900 text-xs font-semibold text-white font-medium py-3 px-4 rounded-xl transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
                   onClick={() => setShowModal(false)}
-                  className="w-full py-2 bg-indigo-900 text-white font-medium rounded-md hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 text-xs"
                 >
-                  Close Details
+                  Close Overview
                 </button>
               </div>
             </div>
@@ -840,19 +1022,17 @@ const DomainAndHosting = () => {
 
         {/* Edit Modal */}
         {showEditModal && editForm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl max-h-[80vh] overflow-y-auto">
-              <div className="bg-indigo-900 text-white p-3 rounded-t-lg flex justify-between items-center">
-                <h2 className="text-xl font-bold">Edit Package</h2>
-                <button
-                  onClick={() => setShowEditModal(false)}
-                  className="text-white hover:text-gray-200 focus:outline-none"
-                >
-                  <FiX size={20} />
-                </button>
-              </div>
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg shadow-lg w-[600px] max-h-[90vh] overflow-y-auto">
+              <h2 className="text-lg mb-4">Edit Package</h2>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 focus:outline-none"
+              >
+                <FiX size={20} />
+              </button>
               <form onSubmit={handleEditSubmit}>
-                <div className="p-6 space-y-6">
+                <div className="space-y-6">
                   {/* Package Info */}
                   <div className="space-y-4">
                     <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
@@ -885,7 +1065,7 @@ const DomainAndHosting = () => {
                           type="text"
                           value={editForm.package}
                           onChange={(e) => handleEditChange(e, 'package')}
-                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full border bg-gray-100 rounded-lg px-4 py-2 text-xs font-semibold text-gray-700"
                           disabled
                         />
                       </div>
@@ -967,7 +1147,7 @@ const DomainAndHosting = () => {
                           step="0.01"
                           value={editForm.cost}
                           onChange={(e) => handleEditChange(e, 'cost')}
-                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full border bg-gray-100 rounded-lg px-4 py-2 text-xs font-semibold text-gray-700"
                           disabled
                         />
                       </div>
@@ -977,7 +1157,7 @@ const DomainAndHosting = () => {
                           type="text"
                           value={editForm.currency}
                           onChange={(e) => handleEditChange(e, 'currency')}
-                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full border bg-gray-100 rounded-lg px-4 py-2 text-xs font-semibold text-gray-700"
                           disabled
                         />
                       </div>
@@ -987,7 +1167,7 @@ const DomainAndHosting = () => {
                           type="text"
                           value={editForm.cycle}
                           onChange={(e) => handleEditChange(e, 'cycle')}
-                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full border bg-gray-100 rounded-lg px-4 py-2 text-xs font-semibold text-gray-700"
                           disabled
                         />
                       </div>
@@ -997,7 +1177,7 @@ const DomainAndHosting = () => {
                           type="text"
                           value={editForm.method}
                           onChange={(e) => handleEditChange(e, 'method')}
-                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          className="mt-1 block w-full border bg-gray-100 rounded-lg px-4 py-2 text-xs font-semibold text-gray-700"
                           disabled
                         />
                       </div>
@@ -1032,20 +1212,71 @@ const DomainAndHosting = () => {
                       </div>
                     </div>
                   </div>
+
+                  {/* Note Section */}
+                  <div className="space-y-4">
+                    <button
+                      type="button"
+                      onClick={() => setShowNoteInput(!showNoteInput)}
+                      className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center"
+                    >
+                      <FiEdit2 className="mr-1" size={14} /> {showNoteInput ? 'Hide Note' : 'Add Note'}
+                    </button>
+                    {showNoteInput && (
+                      <div className="mt-2">
+                        <label className="block text-xs font-medium text-gray-700">Note</label>
+                        <textarea
+                          value={note}
+                          onChange={handleNoteChange}
+                          className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                          rows="3"
+                          placeholder="e.g., Invoice was sent but email bounced"
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="p-3 rounded-b-lg flex justify-end space-x-2">
+                <div className="mt-4 flex justify-end space-x-2">
                   <button
                     type="button"
                     onClick={() => setShowEditModal(false)}
-                    className="py-2 px-4 bg-gray-200 text-gray-700 font-medium rounded-md text-xs hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                    className="bg-gray-600 text-xs font-semibold text-white px-4 py-2 rounded-md"
+                    disabled={loading}
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="py-2 px-4 bg-indigo-900 text-white font-medium rounded-md text-xs hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    className="bg-indigo-900 text-xs font-semibold text-white px-4 py-2 rounded-md flex items-center justify-center"
+                    disabled={loading}
                   >
-                    Save Changes
+                    {loading ? (
+                      <>
+                        <svg
+                          className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          ></circle>
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          ></path>
+                        </svg>
+                        Saving...
+                      </>
+                    ) : (
+                      'Save'
+                    )}
                   </button>
                 </div>
               </form>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Tab } from '@headlessui/react';
-import { FiSearch, FiX, FiEye, FiEdit, FiTrash, FiMoreVertical } from 'react-icons/fi';
+import { FiSearch, FiX, FiEye, FiEdit, FiTrash, FiMoreVertical, FiEdit2 } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -10,9 +10,13 @@ const Hosting = () => {
   const [hostingData, setHostingData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [packagesLoading, setPackagesLoading] = useState(false);
   const [error, setError] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+  const [hostingPackages, setHostingPackages] = useState([]);
+  const [showNoteInput, setShowNoteInput] = useState(false);
+  const [note, setNote] = useState('');
   const [stats, setStats] = useState({
     total: 0,
     active: 0,
@@ -60,13 +64,14 @@ const Hosting = () => {
           package: item.package_id,
           amount: item.amount,
           currency: item.currency,
-          invoiceStatus: !!item.invoice_status, // Ensure boolean
+          invoiceStatus: !!item.invoice_status,
           serverDetails: {
             ipAddress: item.ip_address || '',
             nameservers: [item.nameserver1 || '', item.nameserver2 || ''],
             diskSpace: item.disk_space || '',
             bandwidth: item.bandwidth || ''
-          }
+          },
+          note: item.note || ''
         }));
         setHostingData(formattedData);
         calculateStats(formattedData);
@@ -84,8 +89,30 @@ const Hosting = () => {
     }
   };
 
+  // Fetch hosting packages from API
+  const fetchHostingPackages = async () => {
+    setPackagesLoading(true);
+    try {
+      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/gethostingpackages.php');
+      const data = await response.json();
+      if (data.status === 'success') {
+        setHostingPackages(data.data);
+      } else {
+        setError(data.message || 'Failed to fetch hosting packages');
+        toast.error(data.message || 'Failed to fetch hosting packages');
+      }
+    } catch (err) {
+      setError('Network error occurred while fetching hosting packages');
+      toast.error('Network error occurred while fetching hosting packages');
+      console.error('Error fetching hosting packages:', err);
+    } finally {
+      setPackagesLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchHosting();
+    fetchHostingPackages();
   }, []);
 
   // Calculate statistics for tabs
@@ -215,7 +242,7 @@ const Hosting = () => {
   // Handle search
   const handleSearch = (e) => {
     setSearchQuery(e.target.value);
-    filterData(0); // Reset to "All Hosting" tab when searching
+    filterData(0);
   };
 
   // Format date to DD/MM/YYYY for display
@@ -243,30 +270,32 @@ const Hosting = () => {
   const handleEdit = (hosting) => {
     setSelectedHosting(hosting);
     setFormData({
-      id: hosting.id,
-      domainName: hosting.domainName,
-      hostingType: hosting.hostingType,
-      firstName: hosting.owner.firstName,
-      lastName: hosting.owner.lastName,
-      email1: hosting.contact.email1,
-      email2: hosting.contact.email2,
-      phone1: hosting.contact.phone1,
-      phone2: hosting.contact.phone2,
-      startDate: hosting.dates.startDate,
-      expiryDate: hosting.dates.expiryDate,
-      package: hosting.package,
-      amount: hosting.amount,
-      currency: hosting.currency,
-      invoiceStatus: hosting.invoiceStatus,
-      ipAddress: hosting.serverDetails.ipAddress,
-      nameserver1: hosting.serverDetails.nameservers[0],
-      nameserver2: hosting.serverDetails.nameservers[1],
-      diskSpace: hosting.serverDetails.diskSpace,
-      bandwidth: hosting.serverDetails.bandwidth
+        id: hosting.id || 0,
+        domainName: hosting.domainName || '',
+        hostingType: hosting.hostingType || '',
+        firstName: hosting.owner.firstName || '',
+        lastName: hosting.owner.lastName || '',
+        email1: hosting.contact.email1 || '',
+        email2: hosting.contact.email2 || '',
+        phone1: hosting.contact.phone1 || '',
+        phone2: hosting.contact.phone2 || '',
+        startDate: formatDateForInput(hosting.dates.startDate) || '',
+        expiryDate: formatDateForInput(hosting.dates.expiryDate) || '',
+        package: hosting.package || '',
+        amount: hosting.amount || 0,
+        currency: hosting.currency || 'USD',
+        invoiceStatus: !!hosting.invoiceStatus,
+        ipAddress: hosting.serverDetails.ipAddress || '',
+        nameserver1: hosting.serverDetails.nameservers[0] || '',
+        nameserver2: hosting.serverDetails.nameservers[1] || '',
+        diskSpace: hosting.serverDetails.diskSpace || '',
+        bandwidth: hosting.serverDetails.bandwidth || '',
     });
+    setNote(hosting.note || '');
+    setShowNoteInput(!!hosting.note);
     setEditModalOpen(true);
     setDropdownOpen(null);
-  };
+};
 
   // Handle Delete action
   const handleDelete = (hosting) => {
@@ -331,7 +360,11 @@ const Hosting = () => {
   const validateEditForm = () => {
     const errors = {};
     if (!formData.domainName.trim()) errors.domainName = 'Hosted Domain is required';
-    if (!formData.hostingType.trim()) errors.hostingType = 'Hosting Type is required';
+    if (!formData.hostingType.trim()) {
+      errors.hostingType = 'Hosting Type is required';
+    } else if (!hostingPackages.some((pkg) => pkg.hostingType === formData.hostingType)) {
+      errors.hostingType = 'Invalid Hosting Type selected';
+    }
     if (!formData.firstName.trim()) errors.firstName = 'First Name is required';
     if (!formData.lastName.trim()) errors.lastName = 'Last Name is required';
     if (!formData.email1.trim()) {
@@ -348,82 +381,87 @@ const Hosting = () => {
   };
 
   // Handle form submission for updating hosting
-  const handleUpdateHosting = async (e) => {
+const handleUpdateHosting = async (e) => {
     e.preventDefault();
     const errors = validateEditForm();
     if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
-      toast.error('Please fix form errors before submitting', {
-        position: 'top-right',
-        autoClose: 2000,
-      });
-      return;
+        setFormErrors(errors);
+        toast.error('Please fix form errors before submitting', {
+            position: 'top-right',
+            autoClose: 2000,
+        });
+        return;
     }
-
     const submissionData = {
-      id: formData.id,
-      domainName: formData.domainName,
-      hostingType: formData.hostingType,
-      owner: {
-        firstName: formData.firstName,
-        lastName: formData.lastName
-      },
-      contact: {
-        email1: formData.email1,
-        email2: formData.email2 || '',
-        phone1: formData.phone1 || '',
-        phone2: formData.phone2 || ''
-      },
-      dates: {
-        startDate: formData.startDate,
-        expiryDate: formData.expiryDate
-      },
-      package: formData.package,
-      amount: formData.amount,
-      currency: formData.currency,
-      invoiceStatus: formData.invoiceStatus, // Send boolean value
-      serverDetails: {
-        ipAddress: formData.ipAddress || '',
-        nameservers: [formData.nameserver1 || '', formData.nameserver2 || ''],
-        diskSpace: formData.diskSpace || '',
-        bandwidth: formData.bandwidth || ''
-      }
+        id: formData.id,
+        domainName: formData.domainName,
+        hostingType: formData.hostingType,
+        owner: {
+            firstName: formData.firstName,
+            lastName: formData.lastName
+        },
+        contact: {
+            email1: formData.email1,
+            email2: formData.email2 || '',
+            phone1: formData.phone1 || '',
+            phone2: formData.phone2 || ''
+        },
+        dates: {
+            startDate: formData.startDate,
+            expiryDate: formData.expiryDate
+        },
+        package: formData.package,
+        amount: parseFloat(formData.amount),
+        currency: formData.currency,
+        invoiceStatus: formData.invoiceStatus,
+        serverDetails: {
+            ipAddress: formData.ipAddress || '',
+            nameservers: [formData.nameserver1 || '', formData.nameserver2 || ''],
+            diskSpace: formData.diskSpace || '',
+            bandwidth: formData.bandwidth || ''
+        },
+        note: note || ''
     };
 
+    console.log('Sending payload:', JSON.stringify(submissionData, null, 2));
+
     try {
-      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/updatehosting.php', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(submissionData)
-      });
-      const data = await response.json();
-      if (data.status === 'success') {
-        await fetchHosting();
-        setEditModalOpen(false);
-        setFormData(null);
-        setFormErrors({});
-        toast.success('Hosting updated successfully!', {
-          position: 'top-right',
-          autoClose: 2000,
+        const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/updatehosting.php', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(submissionData)
         });
-      } else {
-        setError(data.message || 'Failed to update hosting');
-        toast.error(data.message || 'Failed to update hosting', {
-          position: 'top-right',
-          autoClose: 2000,
-        });
-      }
+        const data = await response.json();
+        console.log('Response:', data);
+        if (data.status === 'success') {
+            await fetchHosting();
+            setEditModalOpen(false);
+            setFormData(null);
+            setFormErrors({});
+            setShowNoteInput(false);
+            setNote('');
+            toast.success('Hosting updated successfully!', {
+                position: 'top-right',
+                autoClose: 2000,
+            });
+        } else {
+            setError(data.message || 'Failed to update hosting');
+            toast.error(data.message || 'Failed to update hosting', {
+                position: 'top-right',
+                autoClose: 2000,
+            });
+        }
     } catch (err) {
-      setError('Network error occurred while updating hosting');
-      toast.error('Network error occurred while updating hosting', {
-        position: 'top-right',
-        autoClose: 2000,
-      });
-      console.error('Error updating hosting:', err);
+      console.error('Network error:', err);
+        setError(`Network error occurred while updating hosting: ${err.message}`);
+        toast.error(`Network error occurred while updating hosting: ${err.message}`, {
+            position: 'top-right',
+            autoClose: 2000,
+        });
     }
-  };
+};
 
   // Pagination logic
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -708,35 +746,34 @@ const Hosting = () => {
             <button
               onClick={() => paginate(currentPage - 1)}
               disabled={currentPage === 1}
-              className={`px-3 py-1 rounded-md text-xs ${
-                currentPage === 1 ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-indigo-900 text-white hover:bg-indigo-600'
+              className={`px-4 py-2 rounded-md text-sm font-medium ${
+                currentPage === 1 ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'
               }`}
             >
-              Prev
+              Previous
             </button>
-            <div className="flex space-x-1">
-              {getPageNumbers().map((number, index) => (
-                <button
-                  key={index}
-                  onClick={() => typeof number === 'number' && paginate(number)}
-                  className={`px-3 py-1 rounded-md text-xs ${
-                    currentPage === number
-                      ? 'bg-indigo-900 text-white'
-                      : number === '...'
-                      ? 'bg-white text-gray-700 cursor-default'
-                      : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-                  }`}
-                  disabled={number === '...'}
-                >
-                  {number}
-                </button>
-              ))}
-            </div>
+            {getPageNumbers().map((number, index) => (
+              <button
+                key={index}
+                onClick={() => typeof number === 'number' && paginate(number)}
+                className={[
+                  'px-4 py-2 rounded-md text-sm font-medium',
+                  currentPage === number
+                    ? 'bg-indigo-600 text-white'
+                    : number === '...'
+                    ? 'bg-white text-gray-700 cursor-default'
+                    : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                ].join(' ')}
+                disabled={number === '...'}
+              >
+                {number}
+              </button>
+            ))}
             <button
               onClick={() => paginate(currentPage + 1)}
               disabled={currentPage === totalPages}
-              className={`px-3 py-1 rounded-md text-xs ${
-                currentPage === totalPages ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-indigo-900 text-white hover:bg-indigo-600'
+              className={`px-4 py-2 rounded-md text-sm font-medium ${
+                currentPage === totalPages ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'
               }`}
             >
               Next
@@ -747,85 +784,159 @@ const Hosting = () => {
         {showModal && selectedHosting && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-lg w-full max-w-md">
-              <div className="bg-indigo-800 text-white p-3 rounded-t-lg flex justify-between items-center">
-                <h2 className="text-xl font-bold">Hosting Status</h2>
+              <div className="bg-indigo-600 text-white p-4 rounded-t-lg flex justify-between items-center">
+                <h2 className="text-xl font-semibold">Hosting Details</h2>
                 <button
                   onClick={() => setShowModal(false)}
-                  className="text-white hover:text-gray-200 focus:outline-none"
+                  className="text-white hover:text-gray-300 focus:outline-none"
                 >
                   <FiX size={20} />
                 </button>
               </div>
-              <div className="bg-indigo-800 text-white px-3 pb-3 flex items-center">
-                <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium mr-2">
+              <div className="bg-indigo-100 p-4 flex items-center">
+                <span className="bg-green-200 text-green-800 px-3 py-1 rounded-full text-sm font-medium mr-2">
                   {getStatus(selectedHosting.dates.expiryDate).text}
                 </span>
-                <span className="text-lg">{selectedHosting.domainName}</span>
+                <span className="text-lg font-medium">{selectedHosting.domainName}</span>
               </div>
-              <div className="p-4">
-                <div className="flex items-start mb-4">
-                  <div className="bg-indigo-100 p-2 rounded-lg mr-3">
-                    <svg className="w-5 h-5 text-indigo-700" fill="currentColor" viewBox="0 0 20 20">
+              <div className="p-6 space-y-6 max-h-[65vh] overflow-y-auto">
+                <div className="flex items-start">
+                  <div className="bg-indigo-200 p-3 rounded-lg mr-4">
+                    <svg className="w-6 h-6 text-indigo-600" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
                     </svg>
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-2">Hosting Information</h3>
-                    <div className="grid grid-cols-2 gap-y-2 text-sm">
-                      <div className="text-gray-500">Package</div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Hosting Information</h3>
+                    <div className="grid grid-cols-2 gap-y-3 text-sm">
+                      <div className="text-gray-600">Package</div>
                       <div className="text-right font-medium">{selectedHosting.package}</div>
-                      <div className="text-gray-500">Start Date</div>
+                      <div className="text-gray-600">Start Date</div>
                       <div className="text-right font-medium">{formatDate(selectedHosting.dates.startDate)}</div>
-                      <div className="text-gray-500">Expiry Date</div>
+                      <div className="text-gray-600">Expiry Date</div>
                       <div className="text-right font-medium">{formatDate(selectedHosting.dates.expiryDate)}</div>
-                      <div className="text-gray-500">Invoice Status</div>
+                      <div className="text-gray-600">Invoice Status</div>
                       <div className="text-right">
                         <span className={`px-2 py-1 rounded text-xs font-medium ${
                           selectedHosting.invoiceStatus
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-amber-100 text-amber-800'
+                            ? 'bg-green-200 text-green-800'
+                            : 'bg-yellow-200 text-yellow-800'
                         }`}>
                           {selectedHosting.invoiceStatus ? 'Invoiced' : 'Pending'}
                         </span>
                       </div>
-                      <div className="text-gray-500">Amount</div>
+                      <div className="text-gray-600">Amount</div>
                       <div className="text-right font-medium">{selectedHosting.currency} {selectedHosting.amount}</div>
-                      <div className="text-gray-500">IP Address</div>
+                      <div className="text-gray-600">IP Address</div>
                       <div className="text-right font-medium">{selectedHosting.serverDetails.ipAddress || '-'}</div>
-                      <div className="text-gray-500">Disk Space</div>
+                      <div className="text-gray-600">Disk Space</div>
                       <div className="text-right font-medium">{selectedHosting.serverDetails.diskSpace || '-'}</div>
-                      <div className="text-gray-500">Bandwidth</div>
+                      <div className="text-gray-600">Bandwidth</div>
                       <div className="text-right font-medium">{selectedHosting.serverDetails.bandwidth || '-'}</div>
                     </div>
                   </div>
                 </div>
                 <div className="flex items-start">
-                  <div className="bg-purple-100 p-2 rounded-lg mr-3">
-                    <svg className="w-5 h-5 text-purple-700" fill="currentColor" viewBox="0 0 20 20">
+                  <div className="bg-purple-200 p-3 rounded-lg mr-4">
+                    <svg className="w-6 h-6 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
                     </svg>
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-2">Owner Information</h3>
-                    <div className="grid grid-cols-2 gap-y-2 text-sm">
-                      <div className="text-gray-500">Name</div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Owner Information</h3>
+                    <div className="grid grid-cols-2 gap-y-3 text-sm">
+                      <div className="text-gray-600">Name</div>
                       <div className="text-right font-medium">{`${selectedHosting.owner.firstName} ${selectedHosting.owner.lastName}`}</div>
-                      <div className="text-gray-500">Primary Email</div>
+                      <div className="text-gray-600">Primary Email</div>
                       <div className="text-right font-medium truncate">{selectedHosting.contact.email1}</div>
-                      <div className="text-gray-500">Backup Email</div>
+                      <div className="text-gray-600">Backup Email</div>
                       <div className="text-right font-medium truncate">{selectedHosting.contact.email2 || '-'}</div>
-                      <div className="text-gray-500">Primary Phone</div>
+                      <div className="text-gray-600">Primary Phone</div>
                       <div className="text-right font-medium">{selectedHosting.contact.phone1 || '-'}</div>
-                      <div className="text-gray-500">Backup Phone</div>
+                      <div className="text-gray-600">Backup Phone</div>
                       <div className="text-right font-medium">{selectedHosting.contact.phone2 || '-'}</div>
                     </div>
                   </div>
                 </div>
+                {selectedHosting.note && (
+  <div className="flex items-start">
+    <div className="bg-yellow-200 p-3 rounded-lg mr-4">
+      <svg
+        className="h-6 w-6 text-yellow-600"
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+      </svg>
+    </div>
+    <div className="flex-1">
+      <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center justify-between">
+        Note
+        <button
+          onClick={async () => {
+            const originalNote = selectedHosting.note;
+            const updatedHosting = { ...selectedHosting, note: '' };
+            try {
+              const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/updatehosting.php', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  id: updatedHosting.id,
+                  domainName: updatedHosting.domainName, // Ensure original domainName
+                  hostingType: updatedHosting.hostingType,
+                  owner: updatedHosting.owner,
+                  contact: updatedHosting.contact,
+                  dates: updatedHosting.dates,
+                  package: updatedHosting.package,
+                  amount: updatedHosting.amount,
+                  currency: updatedHosting.currency,
+                  invoiceStatus: updatedHosting.invoiceStatus,
+                  serverDetails: updatedHosting.serverDetails,
+                  note: ''
+                })
+              });
+              const data = await response.json();
+              console.log('Note removal response:', data);
+              if (data.status === 'success') {
+                setSelectedHosting(updatedHosting);
+                await fetchHosting();
+                toast.success('Note removed successfully!', {
+                  position: 'top-right',
+                  autoClose: 2000,
+                });
+              } else {
+                throw new Error(data.message || 'Failed to remove note');
+              }
+            } catch (error) {
+              setSelectedHosting({ ...updatedHosting, note: originalNote });
+              console.error('Error removing note:', error);
+              toast.error(`Failed to remove note: ${error.message}`, {
+                position: 'top-right',
+                autoClose: 2000,
+              });
+            }
+          }}
+          className="text-red-600 hover:text-red-800 text-sm flex items-center"
+        >
+          <FiTrash className="mr-2" size={14} /> Remove
+        </button>
+      </h3>
+      <p className="text-sm text-gray-600">{selectedHosting.note}</p>
+    </div>
+  </div>
+)}
               </div>
-              <div className="p-3 rounded-b-lg">
+              <div className="p-4 bg-gray-50 rounded-b-lg">
                 <button
                   onClick={() => setShowModal(false)}
-                  className="w-full py-2 bg-indigo-800 text-white font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-sm"
+                  className="w-full py-2 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-sm"
                 >
                   Close Overview
                 </button>
@@ -837,7 +948,13 @@ const Hosting = () => {
         {editModalOpen && formData && (
           <div className="fixed inset-0 bg-gray-600 bg-opacity-50 backdrop-blur-sm z-50 flex items-center justify-center">
             <div className="bg-white p-6 rounded-lg shadow-lg w-[600px] max-h-[90vh] overflow-y-auto">
-              <h2 className="text-lg mb-4">Edit Hosting</h2>
+              <h2 className="text-lg font-semibold mb-4">Edit Hosting</h2>
+              {packagesLoading && (
+                <div className="text-center text-sm text-gray-500">Loading hosting packages...</div>
+              )}
+              {!packagesLoading && hostingPackages.length === 0 && (
+                <div className="text-center text-sm text-red-500">No hosting packages available.</div>
+              )}
               <form onSubmit={handleUpdateHosting}>
                 <div className="mb-4">
                   <label className="block text-xs font-medium text-gray-700">Hosted Domain</label>
@@ -857,15 +974,23 @@ const Hosting = () => {
                 </div>
                 <div className="mb-4">
                   <label className="block text-xs font-medium text-gray-700">Hosting Type</label>
-                  <input
-                    type="text"
+                  <select
                     name="hostingType"
-                    value={formData.hostingType}
+                    value={formData.hostingType || ''}
                     onChange={handleEditChange}
                     required
-                    placeholder="e.g., Shared"
-                    className="w-full mt-1 p-2 text-xs border border-gray-300 rounded-md px-2 py-1.5 text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
+                    disabled={packagesLoading || hostingPackages.length === 0}
+                    className="w-full mt-1 p-2 border border-gray-300 rounded-md text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="" disabled>
+                      Select Hosting Type
+                    </option>
+                    {hostingPackages.map((pkg) => (
+                      <option key={pkg.id} value={pkg.hostingType}>
+                        {pkg.hostingType}
+                      </option>
+                    ))}
+                  </select>
                   {formErrors.hostingType && (
                     <p className="mt-1 text-xs text-red-500">{formErrors.hostingType}</p>
                   )}
@@ -881,14 +1006,14 @@ const Hosting = () => {
                       onChange={handleEditChange}
                       required
                       placeholder="e.g., John"
-                      className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                      className="w-full mt-1 p-2 border border-gray-300 rounded-md text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                     {formErrors.firstName && (
                       <p className="mt-1 text-xs text-red-500">{formErrors.firstName}</p>
                     )}
                   </div>
                   <div className="mb-4 w-full">
-                    <label className="block text-xs font-medium text-gray-700">Last Name</label>
+                    <label className="block text-xs font-medium text-gray-700">LastPrimaPhone</label>
                     <input
                       type="text"
                       name="lastName"
@@ -896,7 +1021,7 @@ const Hosting = () => {
                       onChange={handleEditChange}
                       required
                       placeholder="e.g., Doe"
-                      className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                      className="w-full mt-1 p-2 border border-gray-300 rounded-md text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                     {formErrors.lastName && (
                       <p className="mt-1 text-xs text-red-500">{formErrors.lastName}</p>
@@ -913,7 +1038,7 @@ const Hosting = () => {
                     onChange={handleEditChange}
                     required
                     placeholder="e.g., john.doe@example.com"
-                    className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full mt-2 p-2 border border-gray-300 rounded-md text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                   {formErrors.email1 && (
                     <p className="mt-1 text-xs text-red-500">{formErrors.email1}</p>
@@ -927,7 +1052,7 @@ const Hosting = () => {
                     value={formData.email2}
                     onChange={handleEditChange}
                     placeholder="e.g., backup@example.com"
-                    className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full mt-2 p-2 border border-gray-300 rounded-md text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
 
@@ -940,7 +1065,7 @@ const Hosting = () => {
                       value={formData.phone1}
                       onChange={handleEditChange}
                       placeholder="e.g., +1234567890"
-                      className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                      className="w-full mt-2 p-2 border border-gray-300 rounded-md text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
                   <div className="mb-4 w-full">
@@ -951,7 +1076,7 @@ const Hosting = () => {
                       value={formData.phone2}
                       onChange={handleEditChange}
                       placeholder="e.g., +1234567891"
-                      className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                      className="w-full mt-2 p-2 border border-gray-300 rounded-md text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
                 </div>
@@ -965,7 +1090,7 @@ const Hosting = () => {
                       value={formatDateForInput(formData.startDate)}
                       onChange={handleEditChange}
                       required
-                      className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                      className="w-full mt-2 p-2 border border-gray-300 rounded-md text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                     {formErrors.startDate && (
                       <p className="mt-1 text-xs text-red-500">{formErrors.startDate}</p>
@@ -979,7 +1104,7 @@ const Hosting = () => {
                       value={formatDateForInput(formData.expiryDate)}
                       onChange={handleEditChange}
                       required
-                      className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                      className="w-full mt-2 p-2 border border-gray-300 rounded-md text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                     {formErrors.expiryDate && (
                       <p className="mt-1 text-xs text-red-500">{formErrors.expiryDate}</p>
@@ -995,12 +1120,33 @@ const Hosting = () => {
                       name="invoiceStatus"
                       checked={formData.invoiceStatus || false}
                       onChange={handleEditChange}
-                      className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                      className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                     />
                     <span className="ml-2 text-xs text-gray-700">
                       {formData.invoiceStatus ? 'Invoiced' : 'Not Invoiced'}
                     </span>
                   </div>
+                </div>
+
+                <div className="mb-4 w-full">
+                  <button
+                    type="button"
+                    onClick={() => setShowNoteInput(!showNoteInput)}
+                    className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center"
+                  >
+                    <FiEdit2 className="mr-2" size={14} /> {showNoteInput ? 'Hide Note' : 'Add Note'}
+                  </button>
+                  {showNoteInput && (
+                    <div className="mt-2">
+                      <textarea
+                        className="w-full mt-1 p-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        value={note}
+                        onChange={(e) => setNote(e.target.value)}
+                        rows="3"
+                        placeholder="e.g., Invoice was sent but email bounced"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className="mb-4">
@@ -1012,32 +1158,34 @@ const Hosting = () => {
                     onChange={handleEditChange}
                     required
                     placeholder="e.g., Basic"
-                    className="w-full mt-1 p-2 border bg-gray-100 rounded-md px-2 py-1.5 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full mt-2 p-2 border bg-gray-100 rounded-md text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                   {formErrors.package && (
                     <p className="mt-1 text-xs text-red-500">{formErrors.package}</p>
                   )}
-                   <p className="text-xs text-gray-500 mt-1">
-                  To change the package, please contact customer service.
-                </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    To change the package, please contact support.
+                  </p>
                 </div>
 
-                <div className="mt-4 w-full justify-between flex gap-5">
+                <div className="mt-6 flex w-full justify-between gap-5">
                   <button
                     type="button"
                     onClick={() => {
                       setEditModalOpen(false);
                       setFormData(null);
                       setFormErrors({});
+                      setShowNoteInput(false);
+                      setNote('');
                     }}
-                    className="ml-2 bg-gray-600 text-xs font-semibold text-white px-4 py-2 rounded-md w-full"
+                    className="bg-gray-600 text-white text-sm font-medium px-4 py-2 rounded-md w-full hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="bg-indigo-900 text-xs font-semibold text-white px-4 py-2 rounded-md w-full flex items-center justify-center"
-                    disabled={Object.keys(formErrors).length > 0}
+                    className="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-md w-full hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center justify-center"
+                    disabled={Object.keys(formErrors).length > 0 || packagesLoading}
                   >
                     Save
                   </button>
@@ -1050,25 +1198,25 @@ const Hosting = () => {
         {deleteModalOpen && selectedHosting && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Confirm Deletion</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Confirm Deletion</h2>
               <p className="text-sm text-gray-600 mb-6">
                 Are you sure you want to delete the hosting for{' '}
                 <span className="font-medium">{selectedHosting.domainName}</span>? This action cannot be undone.
               </p>
-              <div className="flex justify-end space-x-4">
+              <div className="flex justify-end space-x-3">
                 <button
                   onClick={() => {
                     setDeleteModalOpen(false);
                     setSelectedHosting(null);
                   }}
-                  className="px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                  className="px-4 py-2 bg-gray-600 text-gray-800 text-sm font-semibold rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500"
                   disabled={isDeleting}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleConfirmDelete}
-                  className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                  className="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
                   disabled={isDeleting}
                 >
                   {isDeleting ? 'Deleting...' : 'Delete'}
@@ -1079,8 +1227,8 @@ const Hosting = () => {
         )}
 
         {loading && (
-          <div className="mt-8 text-center">
-            <div className="inline-flex items-center px-4 py-2 font-semibold leading-6 text-sm shadow rounded-md text-white bg-indigo-900 transition ease-in-out duration-150 cursor-not-allowed">
+          <div className="mt-4 text-center">
+            <div className="inline-flex items-center px-4 py-2 font-medium text-sm bg-indigo-600 text-white rounded-md shadow-sm">
               <svg
                 className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
                 xmlns="http://www.w3.org/2000/svg"
@@ -1098,33 +1246,33 @@ const Hosting = () => {
                 <path
                   className="opacity-75"
                   fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.977.962 0 4 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                 ></path>
               </svg>
-              Processing...
+              Loading...
             </div>
           </div>
         )}
 
         {error && (
-          <div className="mt-8 bg-red-50 border-l-4 border-red-400 p-4">
+          <div className="mt-6 bg-red-50 border-l-4 border-red-400 p-4 rounded-md">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <svg
-                  className="h-5 w-5 text-red-600"
+                  className="h-5 w-5 text-red-400"
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 20 20"
                   fill="currentColor"
                 >
                   <path
                     fillRule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 0-1.414-1.414L10 8.586 8.707 7.293z"
                     clipRule="evenodd"
                   />
                 </svg>
               </div>
               <div className="ml-3">
-                <p className="text-xs text-red-600">{error}</p>
+                <p className="text-sm text-red-700">{typeof error === 'string' ? error : error.message || 'An error occurred'}</p>
               </div>
             </div>
           </div>
