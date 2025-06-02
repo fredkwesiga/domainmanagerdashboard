@@ -1249,14 +1249,14 @@ const Subscription = () => {
                   <button
                     type="button"
                     onClick={() => setShowEditModal(false)}
-                    className="bg-gray-600 text-xs font-semibold text-white px-4 py-2 rounded-md"
+                    className="bg-gray-600 text-white text-sm font-medium px-4 py-2 rounded-md w-full hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
                     disabled={loading}
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="bg-indigo-900 text-xs font-semibold text-white px-4 py-2 rounded-md flex items-center justify-center"
+                    className="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-md w-full hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center justify-center"
                     disabled={loading}
                   >
                     {loading ? (
