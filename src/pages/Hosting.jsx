@@ -261,7 +261,10 @@ const Hosting = () => {
 
   // Handle View action
   const handleView = (hosting) => {
-    setSelectedHosting(hosting);
+    setSelectedHosting({
+      ...hosting,
+      note: hosting.note || ''
+    });
     setShowModal(true);
     setDropdownOpen(null);
   };
@@ -270,38 +273,95 @@ const Hosting = () => {
   const handleEdit = (hosting) => {
     setSelectedHosting(hosting);
     setFormData({
-        id: hosting.id || 0,
-        domainName: hosting.domainName || '',
-        hostingType: hosting.hostingType || '',
-        firstName: hosting.owner.firstName || '',
-        lastName: hosting.owner.lastName || '',
-        email1: hosting.contact.email1 || '',
-        email2: hosting.contact.email2 || '',
-        phone1: hosting.contact.phone1 || '',
-        phone2: hosting.contact.phone2 || '',
-        startDate: formatDateForInput(hosting.dates.startDate) || '',
-        expiryDate: formatDateForInput(hosting.dates.expiryDate) || '',
-        package: hosting.package || '',
-        amount: hosting.amount || 0,
-        currency: hosting.currency || 'USD',
-        invoiceStatus: !!hosting.invoiceStatus,
-        ipAddress: hosting.serverDetails.ipAddress || '',
-        nameserver1: hosting.serverDetails.nameservers[0] || '',
-        nameserver2: hosting.serverDetails.nameservers[1] || '',
-        diskSpace: hosting.serverDetails.diskSpace || '',
-        bandwidth: hosting.serverDetails.bandwidth || '',
+      id: hosting.id || 0,
+      domainName: hosting.domainName || '',
+      hostingType: hosting.hostingType || '',
+      firstName: hosting.owner.firstName || '',
+      lastName: hosting.owner.lastName || '',
+      email1: hosting.contact.email1 || '',
+      email2: hosting.contact.email2 || '',
+      phone1: hosting.contact.phone1 || '',
+      phone2: hosting.contact.phone2 || '',
+      startDate: formatDateForInput(hosting.dates.startDate) || '',
+      expiryDate: formatDateForInput(hosting.dates.expiryDate) || '',
+      package: hosting.package || '',
+      amount: hosting.amount || 0,
+      currency: hosting.currency || 'USD',
+      invoiceStatus: !!hosting.invoiceStatus,
+      ipAddress: hosting.serverDetails.ipAddress || '',
+      nameserver1: hosting.serverDetails.nameservers[0] || '',
+      nameserver2: hosting.serverDetails.nameservers[1] || '',
+      diskSpace: hosting.serverDetails.diskSpace || '',
+      bandwidth: hosting.serverDetails.bandwidth || '',
+      note: hosting.note || ''
     });
     setNote(hosting.note || '');
     setShowNoteInput(!!hosting.note);
     setEditModalOpen(true);
     setDropdownOpen(null);
-};
+  };
 
   // Handle Delete action
   const handleDelete = (hosting) => {
     setSelectedHosting(hosting);
     setDeleteModalOpen(true);
     setDropdownOpen(null);
+  };
+
+  // Handle Note change
+  const handleNoteChange = (e) => {
+    const { value } = e.target;
+    setNote(value);
+    setFormData((prev) => ({
+      ...prev,
+      note: value
+    }));
+  };
+
+  // Handle Remove Note
+  const handleRemoveNote = async () => {
+    const originalNote = selectedHosting.note;
+    const updatedHosting = { ...selectedHosting, note: '' };
+    
+    try {
+      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/updatehosting.php', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: updatedHosting.id,
+          domainName: updatedHosting.domainName,
+          hostingType: updatedHosting.hostingType,
+          owner: updatedHosting.owner,
+          contact: updatedHosting.contact,
+          dates: updatedHosting.dates,
+          package: updatedHosting.package,
+          amount: updatedHosting.amount,
+          currency: updatedHosting.currency,
+          invoiceStatus: updatedHosting.invoiceStatus,
+          serverDetails: updatedHosting.serverDetails,
+          note: ''
+        })
+      });
+      const data = await response.json();
+      if (data.status === 'success') {
+        setSelectedHosting(updatedHosting);
+        setNote('');
+        setShowNoteInput(false);
+        await fetchHosting();
+        toast.success('Note removed successfully!', {
+          position: 'top-right',
+          autoClose: 2000
+        });
+      } else {
+        throw new Error(data.message || 'Failed to remove note');
+      }
+    } catch (error) {
+      setSelectedHosting({ ...updatedHosting, note: originalNote });
+      toast.error(`Failed to remove note: ${error.message}`, {
+        position: 'top-right',
+        autoClose: 2000
+      });
+    }
   };
 
   // Handle Confirm Delete
@@ -381,87 +441,83 @@ const Hosting = () => {
   };
 
   // Handle form submission for updating hosting
-const handleUpdateHosting = async (e) => {
+  const handleUpdateHosting = async (e) => {
     e.preventDefault();
     const errors = validateEditForm();
     if (Object.keys(errors).length > 0) {
-        setFormErrors(errors);
-        toast.error('Please fix form errors before submitting', {
-            position: 'top-right',
-            autoClose: 2000,
-        });
-        return;
+      setFormErrors(errors);
+      toast.error('Please fix form errors before submitting', {
+        position: 'top-right',
+        autoClose: 2000,
+      });
+      return;
     }
     const submissionData = {
-        id: formData.id,
-        domainName: formData.domainName,
-        hostingType: formData.hostingType,
-        owner: {
-            firstName: formData.firstName,
-            lastName: formData.lastName
-        },
-        contact: {
-            email1: formData.email1,
-            email2: formData.email2 || '',
-            phone1: formData.phone1 || '',
-            phone2: formData.phone2 || ''
-        },
-        dates: {
-            startDate: formData.startDate,
-            expiryDate: formData.expiryDate
-        },
-        package: formData.package,
-        amount: parseFloat(formData.amount),
-        currency: formData.currency,
-        invoiceStatus: formData.invoiceStatus,
-        serverDetails: {
-            ipAddress: formData.ipAddress || '',
-            nameservers: [formData.nameserver1 || '', formData.nameserver2 || ''],
-            diskSpace: formData.diskSpace || '',
-            bandwidth: formData.bandwidth || ''
-        },
-        note: note || ''
+      id: formData.id,
+      domainName: formData.domainName,
+      hostingType: formData.hostingType,
+      owner: {
+        firstName: formData.firstName,
+        lastName: formData.lastName
+      },
+      contact: {
+        email1: formData.email1,
+        email2: formData.email2 || '',
+        phone1: formData.phone1 || '',
+        phone2: formData.phone2 || ''
+      },
+      dates: {
+        startDate: formData.startDate,
+        expiryDate: formData.expiryDate
+      },
+      package: formData.package,
+      amount: parseFloat(formData.amount),
+      currency: formData.currency,
+      invoiceStatus: formData.invoiceStatus,
+      serverDetails: {
+        ipAddress: formData.ipAddress || '',
+        nameservers: [formData.nameserver1 || '', formData.nameserver2 || ''],
+        diskSpace: formData.diskSpace || '',
+        bandwidth: formData.bandwidth || ''
+      },
+      note: formData.note || ''
     };
 
-    console.log('Sending payload:', JSON.stringify(submissionData, null, 2));
-
     try {
-        const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/updatehosting.php', {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(submissionData)
+      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/updatehosting.php', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(submissionData)
+      });
+      const data = await response.json();
+      if (data.status === 'success') {
+        await fetchHosting();
+        setEditModalOpen(false);
+        setFormData(null);
+        setFormErrors({});
+        setShowNoteInput(false);
+        setNote('');
+        toast.success('Hosting updated successfully!', {
+          position: 'top-right',
+          autoClose: 2000,
         });
-        const data = await response.json();
-        console.log('Response:', data);
-        if (data.status === 'success') {
-            await fetchHosting();
-            setEditModalOpen(false);
-            setFormData(null);
-            setFormErrors({});
-            setShowNoteInput(false);
-            setNote('');
-            toast.success('Hosting updated successfully!', {
-                position: 'top-right',
-                autoClose: 2000,
-            });
-        } else {
-            setError(data.message || 'Failed to update hosting');
-            toast.error(data.message || 'Failed to update hosting', {
-                position: 'top-right',
-                autoClose: 2000,
-            });
-        }
+      } else {
+        setError(data.message || 'Failed to update hosting');
+        toast.error(data.message || 'Failed to update hosting', {
+          position: 'top-right',
+          autoClose: 2000,
+        });
+      }
     } catch (err) {
-      console.error('Network error:', err);
-        setError(`Network error occurred while updating hosting: ${err.message}`);
-        toast.error(`Network error occurred while updating hosting: ${err.message}`, {
-            position: 'top-right',
-            autoClose: 2000,
-        });
+      setError(`Network error occurred while updating hosting: ${err.message}`);
+      toast.error(`Network error occurred while updating hosting: ${err.message}`, {
+        position: 'top-right',
+        autoClose: 2000,
+      });
     }
-};
+  };
 
   // Pagination logic
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -859,79 +915,37 @@ const handleUpdateHosting = async (e) => {
                   </div>
                 </div>
                 {selectedHosting.note && (
-  <div className="flex items-start">
-    <div className="bg-yellow-200 p-3 rounded-lg mr-4">
-      <svg
-        className="h-6 w-6 text-yellow-600"
-        xmlns="http://www.w3.org/2000/svg"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-        />
-      </svg>
-    </div>
-    <div className="flex-1">
-      <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center justify-between">
-        Note
-        <button
-          onClick={async () => {
-            const originalNote = selectedHosting.note;
-            const updatedHosting = { ...selectedHosting, note: '' };
-            try {
-              const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/updatehosting.php', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  id: updatedHosting.id,
-                  domainName: updatedHosting.domainName, // Ensure original domainName
-                  hostingType: updatedHosting.hostingType,
-                  owner: updatedHosting.owner,
-                  contact: updatedHosting.contact,
-                  dates: updatedHosting.dates,
-                  package: updatedHosting.package,
-                  amount: updatedHosting.amount,
-                  currency: updatedHosting.currency,
-                  invoiceStatus: updatedHosting.invoiceStatus,
-                  serverDetails: updatedHosting.serverDetails,
-                  note: ''
-                })
-              });
-              const data = await response.json();
-              console.log('Note removal response:', data);
-              if (data.status === 'success') {
-                setSelectedHosting(updatedHosting);
-                await fetchHosting();
-                toast.success('Note removed successfully!', {
-                  position: 'top-right',
-                  autoClose: 2000,
-                });
-              } else {
-                throw new Error(data.message || 'Failed to remove note');
-              }
-            } catch (error) {
-              setSelectedHosting({ ...updatedHosting, note: originalNote });
-              console.error('Error removing note:', error);
-              toast.error(`Failed to remove note: ${error.message}`, {
-                position: 'top-right',
-                autoClose: 2000,
-              });
-            }
-          }}
-          className="text-red-600 hover:text-red-800 text-sm flex items-center"
-        >
-          <FiTrash className="mr-2" size={14} /> Remove
-        </button>
-      </h3>
-      <p className="text-sm text-gray-600">{selectedHosting.note}</p>
-    </div>
-  </div>
-)}
+                  <div className="flex items-start">
+                    <div className="bg-yellow-200 p-3 rounded-lg mr-4">
+                      <svg
+                        className="h-6 w-6 text-yellow-600"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center justify-between">
+                        Note
+                        <button
+                          onClick={handleRemoveNote}
+                          className="text-red-600 hover:text-red-800 text-sm flex items-center"
+                        >
+                          <FiTrash className="mr-2" size={14} /> Remove
+                        </button>
+                      </h3>
+                      <p className="text-sm text-gray-600">{selectedHosting.note}</p>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="p-4 bg-gray-50 rounded-b-lg">
                 <button
@@ -1013,7 +1027,7 @@ const handleUpdateHosting = async (e) => {
                     )}
                   </div>
                   <div className="mb-4 w-full">
-                    <label className="block text-xs font-medium text-gray-700">LastPrimaPhone</label>
+                    <label className="block text-xs font-medium text-gray-700">Last Name</label>
                     <input
                       type="text"
                       name="lastName"
@@ -1141,7 +1155,7 @@ const handleUpdateHosting = async (e) => {
                       <textarea
                         className="w-full mt-1 p-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         value={note}
-                        onChange={(e) => setNote(e.target.value)}
+                        onChange={handleNoteChange}
                         rows="3"
                         placeholder="e.g., Invoice was sent but email bounced"
                       />

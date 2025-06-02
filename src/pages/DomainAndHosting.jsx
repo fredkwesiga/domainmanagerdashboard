@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Tab } from '@headlessui/react';
-import { FiSearch, FiX, FiEye, FiEdit, FiTrash, FiMoreVertical, FiEdit2, FiTrash2 } from 'react-icons/fi';
+import {
+  FiSearch,
+  FiX,
+  FiEye,
+  FiEdit,
+  FiTrash,
+  FiMoreVertical,
+  FiEdit2,
+  FiTrash2
+} from 'react-icons/fi';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
@@ -29,6 +38,34 @@ const DomainAndHosting = () => {
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [note, setNote] = useState('');
   const [itemsPerPage] = useState(10);
+
+  // 1️⃣ Option arrays for dropdowns
+  const currencyOptions = [
+    { value: 'USD', label: 'US Dollar' },
+    { value: 'EUR', label: 'Euro' },
+    { value: 'GBP', label: 'British Pound Sterling' },
+    { value: 'UGX', label: 'Ugandan Shilling' },
+  ];
+
+  const billingCycleOptions = [
+    { value: 'Monthly', label: 'Monthly' },
+    { value: 'Quarterly', label: 'Quarterly' },
+    { value: 'Yearly', label: 'Yearly' },
+  ];
+
+  const statusOptions = [
+    { value: 'Active', label: 'Active' },
+    { value: 'Expiring Soon', label: 'Expiring Soon' },
+    { value: 'Expired', label: 'Expired' },
+    { value: 'Cancelled', label: 'Cancelled' },
+  ];
+
+  const paymentMethodOptions = [
+    { value: '', label: 'Select payment method' },
+    { value: 'Credit Card', label: 'Credit Card' },
+    { value: 'PayPal', label: 'PayPal' },
+    { value: 'Bank Transfer', label: 'Bank Transfer' },
+  ];
 
   // Fetch data
   const fetchData = async () => {
@@ -1077,10 +1114,11 @@ const DomainAndHosting = () => {
                           className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           required
                         >
-                          <option value="Active">Active</option>
-                          <option value="Expiring Soon">Expiring Soon</option>
-                          <option value="Expired">Expired</option>
-                          <option value="Cancelled">Cancelled</option>
+                          {statusOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
                         </select>
                       </div>
                     </div>
@@ -1147,39 +1185,53 @@ const DomainAndHosting = () => {
                           step="0.01"
                           value={editForm.cost}
                           onChange={(e) => handleEditChange(e, 'cost')}
-                          className="mt-1 block w-full border bg-gray-100 rounded-lg px-4 py-2 text-xs font-semibold text-gray-700"
-                          disabled
+                          className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                          required
                         />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-700">Currency</label>
-                        <input
-                          type="text"
+                        <select
                           value={editForm.currency}
                           onChange={(e) => handleEditChange(e, 'currency')}
-                          className="mt-1 block w-full border bg-gray-100 rounded-lg px-4 py-2 text-xs font-semibold text-gray-700"
-                          disabled
-                        />
+                          className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                          required
+                        >
+                          {currencyOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-700">Billing Cycle</label>
-                        <input
-                          type="text"
+                        <select
                           value={editForm.cycle}
                           onChange={(e) => handleEditChange(e, 'cycle')}
-                          className="mt-1 block w-full border bg-gray-100 rounded-lg px-4 py-2 text-xs font-semibold text-gray-700"
-                          disabled
-                        />
+                          className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                          required
+                        >
+                          {billingCycleOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-700">Payment Method (optional)</label>
-                        <input
-                          type="text"
+                        <select
                           value={editForm.method}
                           onChange={(e) => handleEditChange(e, 'method')}
-                          className="mt-1 block w-full border bg-gray-100 rounded-lg px-4 py-2 text-xs font-semibold text-gray-700"
-                          disabled
-                        />
+                         className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                        >
+                          {paymentMethodOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     </div>
                   </div>
@@ -1236,18 +1288,18 @@ const DomainAndHosting = () => {
                     )}
                   </div>
                 </div>
-                <div className="mt-4 flex justify-end space-x-2">
+                <div className="mt-6 flex w-full justify-between gap-5">
                   <button
                     type="button"
                     onClick={() => setShowEditModal(false)}
-                    className="bg-gray-600 text-xs font-semibold text-white px-4 py-2 rounded-md"
+                    className="bg-gray-600 text-white text-sm font-medium px-4 py-2 rounded-md w-full hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
                     disabled={loading}
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="bg-indigo-900 text-xs font-semibold text-white px-4 py-2 rounded-md flex items-center justify-center"
+                    className="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-md w-full hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center justify-center"
                     disabled={loading}
                   >
                     {loading ? (
