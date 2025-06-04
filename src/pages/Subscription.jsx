@@ -223,27 +223,27 @@ const Subscription = () => {
     setDropdownOpen(null);
   };
 
- const handleEdit = (subscription) => {
+  const handleEdit = (subscription) => {
     console.log('Editing subscription:', subscription);
     setEditForm({
-        id: subscription.id || 0,
-        planName: subscription.planName || '',
-        type: subscription.type || '',
-        cost: subscription.cost || 0,
-        currency: subscription.currency || 'USD',
-        status: subscription.status || 'Active',
-        cycle: subscription.cycle || '',
-        nextDueDate: formatDateForInput(subscription.nextDueDate) || '',
-        domain: subscription.domain || '',
-        customer: {
-            firstName: subscription.customer ? subscription.customer.split(' ')[0] || '' : '',
-            lastName: subscription.customer ? subscription.customer.split(' ').slice(1).join(' ') || '' : '',
-            email: subscription.customerEmail || '',
-            phone: subscription.customerPhone || '',
-        },
-        startDate: formatDateForInput(subscription.startDate) || '',
-        method: subscription.method || '',
-        note: subscription.note || '',
+      id: subscription.id || 0,
+      planName: subscription.planName || '',
+      type: subscription.type || '',
+      cost: subscription.cost || 0,
+      currency: subscription.currency || 'USD',
+      status: subscription.status || 'Active',
+      cycle: subscription.cycle || '',
+      nextDueDate: formatDateForInput(subscription.nextDueDate) || '',
+      domain: subscription.domain || '',
+      customer: {
+        firstName: subscription.customer ? subscription.customer.split(' ')[0] || '' : '',
+        lastName: subscription.customer ? subscription.customer.split(' ').slice(1).join(' ') || '' : '',
+        email: subscription.customerEmail || '',
+        phone: subscription.customerPhone || '',
+      },
+      startDate: formatDateForInput(subscription.startDate) || '',
+      method: subscription.method || '',
+      note: subscription.note || '',
     });
     setNote(subscription.note || '');
     setShowNoteInput(!!subscription.note);
@@ -251,7 +251,7 @@ const Subscription = () => {
     setShowEditModal(true);
     setShowModal(false);
     setDropdownOpen(null);
-};
+  };
 
   const handleEditChange = (e, field, subField = null) => {
     const { value } = e.target;
@@ -281,10 +281,22 @@ const Subscription = () => {
   };
 
   const handleRemoveNote = async () => {
-    const updatedSubscription = { ...selectedSubscription, note: '' };
-    setSelectedSubscription(updatedSubscription);
-    setNote('');
-    await editSubscription({ ...editForm, note: '' });
+    if (!window.confirm('Are you sure you want to remove this note?')) {
+      return;
+    }
+    setLoading(true);
+    try {
+      const updatedSubscription = { ...editForm, note: '' };
+      await editSubscription(updatedSubscription, true); // Pass flag to trigger "Note has been removed" toast
+      setSelectedSubscription((prev) => ({ ...prev, note: '' }));
+      setNote('');
+      setShowNoteInput(false);
+    } catch (err) {
+      toast.error('Failed to remove note');
+      console.error('Error removing note:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleEditSubmit = async (e) => {
@@ -292,7 +304,7 @@ const Subscription = () => {
     await editSubscription({ ...editForm, note });
   };
 
-  const editSubscription = async (subscription) => {
+  const editSubscription = async (subscription, isNoteRemoval = false) => {
     setLoading(true);
     try {
       const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/updatesubscriptions.php', {
@@ -304,30 +316,46 @@ const Subscription = () => {
       });
       const result = await response.json();
       if (result.status === 'success') {
-        toast.success(result.message);
-        setSubscriptionData((prev) =>
-          prev.map((item) =>
-            item.id === subscription.id
-              ? {
-                  ...item,
-                  planName: subscription.planName,
-                  type: subscription.type,
-                  cost: parseFloat(subscription.cost),
-                  currency: subscription.currency,
-                  status: subscription.status,
-                  cycle: subscription.cycle,
-                  nextDueDate: subscription.nextDueDate,
-                  domain: subscription.domain,
-                  customer: `${subscription.customer.firstName} ${subscription.customer.lastName}`.trim(),
-                  customerEmail: subscription.customer.email,
-                  customerPhone: subscription.customer.phone,
-                  startDate: subscription.startDate,
-                  method: subscription.method,
-                  note: subscription.note,
-                }
-              : item
-          )
+        // Check if a note was added, updated, or removed
+        const originalSubscription = subscriptionData.find((item) => item.id === subscription.id);
+        const wasNoteAdded = !originalSubscription.note && subscription.note;
+        const wasNoteUpdated = originalSubscription.note && subscription.note && originalSubscription.note !== subscription.note;
+        const wasNoteRemoved = originalSubscription.note && !subscription.note;
+
+        // Show specific toast message
+        if (isNoteRemoval || wasNoteRemoved) {
+          toast.success('Note has been removed');
+        } else if (wasNoteAdded) {
+          toast.success('Note Added Successfully');
+        } else if (wasNoteUpdated) {
+          toast.success('Note Updated Successfully');
+        } else {
+          toast.success(result.message || 'Subscription updated successfully');
+        }
+
+        const updatedData = subscriptionData.map((item) =>
+          item.id === subscription.id
+            ? {
+                ...item,
+                planName: subscription.planName,
+                type: subscription.type,
+                cost: parseFloat(subscription.cost),
+                currency: subscription.currency,
+                status: subscription.status,
+                cycle: subscription.cycle,
+                nextDueDate: subscription.nextDueDate,
+                domain: subscription.domain,
+                customer: `${subscription.customer.firstName} ${subscription.customer.lastName}`.trim(),
+                customerEmail: subscription.customer.email,
+                customerPhone: subscription.customer.phone,
+                startDate: subscription.startDate,
+                method: subscription.method,
+                note: subscription.note,
+              }
+            : item
         );
+
+        setSubscriptionData(updatedData);
         setFilteredData((prev) =>
           prev.map((item) =>
             item.id === subscription.id
@@ -351,10 +379,10 @@ const Subscription = () => {
               : item
           )
         );
-        calculateStats(subscriptionData);
+        calculateStats(updatedData);
         setShowEditModal(false);
       } else {
-        toast.error(result.message);
+        toast.error(result.message || 'Failed to update subscription');
       }
     } catch (err) {
       toast.error('Failed to update subscription');
@@ -384,9 +412,10 @@ const Subscription = () => {
       const result = await response.json();
       if (result.status === 'success') {
         toast.success(result.message);
-        setSubscriptionData((prev) => prev.filter((item) => item.id !== id));
-        setFilteredData((prev) => prev.filter((item) => item.id !== id));
-        calculateStats(subscriptionData.filter((item) => item.id !== id));
+        const updatedData = subscriptionData.filter((item) => item.id !== id);
+        setSubscriptionData(updatedData);
+        setFilteredData(updatedData);
+        calculateStats(updatedData);
       } else {
         toast.error(result.message);
       }
