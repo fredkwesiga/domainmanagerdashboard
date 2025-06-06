@@ -39,7 +39,7 @@ const DomainAndHosting = () => {
   const [note, setNote] = useState('');
   const [itemsPerPage] = useState(10);
 
-  // 1️⃣ Option arrays for dropdowns
+  // Option arrays for dropdowns
   const currencyOptions = [
     { value: 'USD', label: 'US Dollar' },
     { value: 'EUR', label: 'Euro' },
@@ -332,10 +332,22 @@ const DomainAndHosting = () => {
 
   // Handle Remove Note
   const handleRemoveNote = async () => {
-    const updatedItem = { ...selectedItem, note: '' };
-    setSelectedItem(updatedItem);
-    setNote('');
-    await editPackage({ ...editForm, note: '' });
+    if (!window.confirm('Are you sure you want to remove this note?')) {
+      return;
+    }
+    setLoading(true);
+    try {
+      const updatedItem = { ...editForm, note: '' };
+      await editPackage(updatedItem, true); // Pass flag to trigger "Note has been removed" toast
+      setSelectedItem((prev) => ({ ...prev, note: '' }));
+      setNote('');
+      setShowNoteInput(false);
+    } catch (err) {
+      toast.error('Failed to remove note');
+      console.error('Error removing note:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Handle Edit submission
@@ -345,7 +357,7 @@ const DomainAndHosting = () => {
   };
 
   // Edit package via API
-  const editPackage = async (pkg) => {
+  const editPackage = async (pkg, isNoteRemoval = false) => {
     setLoading(true);
     try {
       const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/updatedomainandhosting.php', {
@@ -362,7 +374,12 @@ const DomainAndHosting = () => {
           cycle: pkg.cycle,
           nextDueDate: pkg.nextDueDate,
           domain: pkg.domain,
-          customer: pkg.customer,
+          customer: {
+            firstName: pkg.customer.firstName,
+            lastName: pkg.customer.lastName,
+            email: pkg.customer.email,
+            phone: pkg.customer.phone,
+          },
           startDate: pkg.startDate,
           method: pkg.method,
           note: pkg.note,
@@ -370,31 +387,47 @@ const DomainAndHosting = () => {
       });
       const result = await response.json();
       if (result.status === 'success') {
-        toast.success(result.message || 'Updated successfully');
-        setData((prev) =>
-          prev.map((item) =>
-            item.id === pkg.id
-              ? {
-                  ...item,
-                  planName: pkg.planName,
-                  type: pkg.type,
-                  package: pkg.package,
-                  cost: parseFloat(pkg.cost),
-                  currency: pkg.currency,
-                  status: pkg.status,
-                  cycle: pkg.cycle,
-                  nextDueDate: pkg.nextDueDate,
-                  domain: pkg.domain,
-                  customer: `${pkg.customer.firstName} ${pkg.customer.lastName}`.trim(),
-                  customerEmail: pkg.customer.email,
-                  customerPhone: pkg.customer.phone,
-                  startDate: pkg.startDate,
-                  method: pkg.method,
-                  note: pkg.note,
-                }
-              : item
-          )
+        // Check if a note was added, updated, or removed
+        const originalItem = data.find((item) => item.id === pkg.id);
+        const wasNoteAdded = !originalItem.note && pkg.note;
+        const wasNoteUpdated = originalItem.note && pkg.note && originalItem.note !== pkg.note;
+        const wasNoteRemoved = originalItem.note && !pkg.note;
+
+        // Show specific toast message
+        if (isNoteRemoval || wasNoteRemoved) {
+          toast.success('Note has been removed');
+        } else if (wasNoteAdded) {
+          toast.success('Note Added Successfully');
+        } else if (wasNoteUpdated) {
+          toast.success('Note Updated Successfully');
+        } else {
+          toast.success(result.message || 'Package updated successfully');
+        }
+
+        const updatedData = data.map((item) =>
+          item.id === pkg.id
+            ? {
+                ...item,
+                planName: pkg.planName,
+                type: pkg.type,
+                package: pkg.package,
+                cost: parseFloat(pkg.cost),
+                currency: pkg.currency,
+                status: pkg.status,
+                cycle: pkg.cycle,
+                nextDueDate: pkg.nextDueDate,
+                domain: pkg.domain,
+                customer: `${pkg.customer.firstName} ${pkg.customer.lastName}`.trim(),
+                customerEmail: pkg.customer.email,
+                customerPhone: pkg.customer.phone,
+                startDate: pkg.startDate,
+                method: pkg.method,
+                note: pkg.note,
+              }
+            : item
         );
+
+        setData(updatedData);
         setFilteredData((prev) =>
           prev.map((item) =>
             item.id === pkg.id
@@ -419,13 +452,13 @@ const DomainAndHosting = () => {
               : item
           )
         );
-        calculateStats(data);
+        calculateStats(updatedData);
         setShowEditModal(false);
       } else {
-        toast.error(result.message || 'Failed to update');
+        toast.error(result.message || 'Failed to update package');
       }
     } catch (err) {
-      toast.error('Failed to update');
+      toast.error('Failed to update package');
       console.error('Update error:', err);
     } finally {
       setLoading(false);
@@ -454,9 +487,10 @@ const DomainAndHosting = () => {
       const result = await response.json();
       if (result.status === 'success') {
         toast.success(result.message || 'Package deleted successfully');
-        setData((prev) => prev.filter((item) => item.id !== id));
-        setFilteredData((prev) => prev.filter((item) => item.id !== id));
-        calculateStats(data.filter((item) => item.id !== id));
+        const updatedData = data.filter((item) => item.id !== id);
+        setData(updatedData);
+        setFilteredData(updatedData);
+        calculateStats(updatedData);
       } else {
         toast.error(result.message || 'Failed to delete package');
       }
@@ -1224,7 +1258,7 @@ const DomainAndHosting = () => {
                         <select
                           value={editForm.method}
                           onChange={(e) => handleEditChange(e, 'method')}
-                         className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                          className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                         >
                           {paymentMethodOptions.map((opt) => (
                             <option key={opt.value} value={opt.value}>

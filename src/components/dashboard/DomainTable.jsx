@@ -157,6 +157,21 @@ const DomainTable = ({
 
       const result = await res.json();
       if (result.status === "success") {
+        const originalDomain = domains.find((d) => d.id === updatedDomain.id);
+        const wasNoteAdded = !originalDomain.note && note;
+        const wasNoteUpdated = originalDomain.note && note && originalDomain.note !== note;
+        const wasNoteRemoved = originalDomain.note && !note;
+
+        if (wasNoteRemoved) {
+          toast.success('Note has been removed');
+        } else if (wasNoteAdded) {
+          toast.success('Note Added Successfully');
+        } else if (wasNoteUpdated) {
+          toast.success('Note Updated Successfully');
+        } else {
+          toast.success(`Domain ${updatedDomain.domainName} has been updated successfully!`);
+        }
+
         // Update local state with the note
         const updatedDomains = domains.map((d) =>
           d.id === updatedDomain.id
@@ -184,6 +199,9 @@ const DomainTable = ({
   };
 
   const handleRemoveNote = () => {
+    if (!window.confirm('Are you sure you want to remove this note?')) {
+      return;
+    }
     setNote('');
     const updatedViewingDomain = { ...viewingDomain, note: '' };
     setViewingDomain(updatedViewingDomain);

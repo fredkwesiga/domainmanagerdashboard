@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Tab } from '@headlessui/react';
-import { FiSearch, FiX, FiEye, FiEdit, FiTrash, FiMoreVertical, FiEdit2 } from 'react-icons/fi';
+import { FiSearch, FiX, FiEye, FiEdit, FiTrash, FiMoreVertical, FiEdit2, FiTrash2 } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -320,47 +320,114 @@ const Hosting = () => {
 
   // Handle Remove Note
   const handleRemoveNote = async () => {
-    const originalNote = selectedHosting.note;
-    const updatedHosting = { ...selectedHosting, note: '' };
-    
+    if (!window.confirm('Are you sure you want to remove this note?')) {
+      return;
+    }
+    setLoading(true);
+    try {
+      const updatedHosting = { ...selectedHosting, note: '' };
+      const submissionData = {
+        id: updatedHosting.id,
+        domainName: updatedHosting.domainName,
+        hostingType: updatedHosting.hostingType,
+        owner: updatedHosting.owner,
+        contact: updatedHosting.contact,
+        dates: updatedHosting.dates,
+        package: updatedHosting.package,
+        amount: parseFloat(updatedHosting.amount),
+        currency: updatedHosting.currency,
+        invoiceStatus: updatedHosting.invoiceStatus,
+        serverDetails: updatedHosting.serverDetails,
+        note: ''
+      };
+      await updateHosting(submissionData, true); // Pass isNoteRemoval flag
+      setSelectedHosting(updatedHosting);
+      setNote('');
+      setShowNoteInput(false);
+    } catch (error) {
+      toast.error(`Failed to remove note: ${error.message}`);
+      console.error('Error removing note:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Update hosting via API
+  const updateHosting = async (submissionData, isNoteRemoval = false) => {
     try {
       const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/updatehosting.php', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: updatedHosting.id,
-          domainName: updatedHosting.domainName,
-          hostingType: updatedHosting.hostingType,
-          owner: updatedHosting.owner,
-          contact: updatedHosting.contact,
-          dates: updatedHosting.dates,
-          package: updatedHosting.package,
-          amount: updatedHosting.amount,
-          currency: updatedHosting.currency,
-          invoiceStatus: updatedHosting.invoiceStatus,
-          serverDetails: updatedHosting.serverDetails,
-          note: ''
-        })
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(submissionData)
       });
       const data = await response.json();
       if (data.status === 'success') {
-        setSelectedHosting(updatedHosting);
-        setNote('');
-        setShowNoteInput(false);
-        await fetchHosting();
-        toast.success('Note removed successfully!', {
-          position: 'top-right',
-          autoClose: 2000
-        });
+        // Check note changes
+        const originalItem = hostingData.find((item) => item.id === submissionData.id);
+        const wasNoteAdded = !originalItem.note && submissionData.note;
+        const wasNoteUpdated = originalItem.note && submissionData.note && originalItem.note !== submissionData.note;
+        const wasNoteRemoved = originalItem.note && !submissionData.note;
+
+        // Show appropriate toast message
+        if (isNoteRemoval || wasNoteRemoved) {
+          toast.success('Note has been removed');
+        } else if (wasNoteAdded) {
+          toast.success('Note Added Successfully');
+        } else if (wasNoteUpdated) {
+          toast.success('Note Updated Successfully');
+        } else {
+          toast.success('Hosting updated successfully!');
+        }
+
+        // Update local state
+        const updatedData = hostingData.map((item) =>
+          item.id === submissionData.id
+            ? {
+                ...item,
+                domainName: submissionData.domainName,
+                hostingType: submissionData.hostingType,
+                owner: submissionData.owner,
+                contact: submissionData.contact,
+                dates: submissionData.dates,
+                package: submissionData.package,
+                amount: submissionData.amount,
+                currency: submissionData.currency,
+                invoiceStatus: submissionData.invoiceStatus,
+                serverDetails: submissionData.serverDetails,
+                note: submissionData.note
+              }
+            : item
+        );
+
+        setHostingData(updatedData);
+        setFilteredData((prev) =>
+          prev.map((item) =>
+            item.id === submissionData.id
+              ? {
+                  ...item,
+                  domainName: submissionData.domainName,
+                  hostingType: submissionData.hostingType,
+                  owner: submissionData.owner,
+                  contact: submissionData.contact,
+                  dates: submissionData.dates,
+                  package: submissionData.package,
+                  amount: submissionData.amount,
+                  currency: submissionData.currency,
+                  invoiceStatus: submissionData.invoiceStatus,
+                  serverDetails: submissionData.serverDetails,
+                  note: submissionData.note
+                }
+              : item
+          )
+        );
+        calculateStats(updatedData);
       } else {
-        throw new Error(data.message || 'Failed to remove note');
+        throw new Error(data.message || 'Failed to update hosting');
       }
-    } catch (error) {
-      setSelectedHosting({ ...updatedHosting, note: originalNote });
-      toast.error(`Failed to remove note: ${error.message}`, {
-        position: 'top-right',
-        autoClose: 2000
-      });
+    } catch (err) {
+      throw new Error(`Network error occurred while updating hosting: ${err.message}`);
     }
   };
 
@@ -381,23 +448,14 @@ const Hosting = () => {
         await fetchHosting();
         setDeleteModalOpen(false);
         setSelectedHosting(null);
-        toast.success('Hosting deleted successfully!', {
-          position: 'top-right',
-          autoClose: 2000,
-        });
+        toast.success('Hosting deleted successfully!');
       } else {
         setError(data.message || 'Failed to delete hosting');
-        toast.error(data.message || 'Failed to delete hosting', {
-          position: 'top-right',
-          autoClose: 2000,
-        });
+        toast.error(data.message || 'Failed to delete hosting');
       }
     } catch (err) {
       setError('Network error occurred while deleting hosting');
-      toast.error('Network error occurred while deleting hosting', {
-        position: 'top-right',
-        autoClose: 2000,
-      });
+      toast.error('Network error occurred while deleting hosting');
       console.error('Error deleting hosting:', err);
     } finally {
       setIsDeleting(false);
@@ -446,12 +504,10 @@ const Hosting = () => {
     const errors = validateEditForm();
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
-      toast.error('Please fix form errors before submitting', {
-        position: 'top-right',
-        autoClose: 2000,
-      });
+      toast.error('Please fix form errors before submitting');
       return;
     }
+    setLoading(true);
     const submissionData = {
       id: formData.id,
       domainName: formData.domainName,
@@ -484,38 +540,16 @@ const Hosting = () => {
     };
 
     try {
-      const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/updatehosting.php', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(submissionData)
-      });
-      const data = await response.json();
-      if (data.status === 'success') {
-        await fetchHosting();
-        setEditModalOpen(false);
-        setFormData(null);
-        setFormErrors({});
-        setShowNoteInput(false);
-        setNote('');
-        toast.success('Hosting updated successfully!', {
-          position: 'top-right',
-          autoClose: 2000,
-        });
-      } else {
-        setError(data.message || 'Failed to update hosting');
-        toast.error(data.message || 'Failed to update hosting', {
-          position: 'top-right',
-          autoClose: 2000,
-        });
-      }
+      await updateHosting(submissionData);
+      setEditModalOpen(false);
+      setFormData(null);
+      setFormErrors({});
+      setShowNoteInput(false);
+      setNote('');
     } catch (err) {
-      setError(`Network error occurred while updating hosting: ${err.message}`);
-      toast.error(`Network error occurred while updating hosting: ${err.message}`, {
-        position: 'top-right',
-        autoClose: 2000,
-      });
+      toast.error(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -850,10 +884,10 @@ const Hosting = () => {
                 </button>
               </div>
               <div className="bg-indigo-100 p-4 flex items-center">
-                <span className="bg-green-200 text-green-800 px-3 py-1 rounded-full text-sm font-medium mr-2">
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatus(selectedHosting.dates.expiryDate).color}`}>
                   {getStatus(selectedHosting.dates.expiryDate).text}
                 </span>
-                <span className="text-lg font-medium">{selectedHosting.domainName}</span>
+                <span className="ml-2 text-lg font-medium">{selectedHosting.domainName}</span>
               </div>
               <div className="p-6 space-y-6 max-h-[65vh] overflow-y-auto">
                 <div className="flex items-start">
@@ -939,7 +973,7 @@ const Hosting = () => {
                           onClick={handleRemoveNote}
                           className="text-red-600 hover:text-red-800 text-sm flex items-center"
                         >
-                          <FiTrash className="mr-2" size={14} /> Remove
+                          <FiTrash2 className="mr-2" size={14} /> Remove
                         </button>
                       </h3>
                       <p className="text-sm text-gray-600">{selectedHosting.note}</p>
@@ -1101,7 +1135,7 @@ const Hosting = () => {
                     <input
                       type="date"
                       name="startDate"
-                      value={formatDateForInput(formData.startDate)}
+                      value={formData.startDate}
                       onChange={handleEditChange}
                       required
                       className="w-full mt-2 p-2 border border-gray-300 rounded-md text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -1115,7 +1149,7 @@ const Hosting = () => {
                     <input
                       type="date"
                       name="expiryDate"
-                      value={formatDateForInput(formData.expiryDate)}
+                      value={formData.expiryDate}
                       onChange={handleEditChange}
                       required
                       className="w-full mt-2 p-2 border border-gray-300 rounded-md text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -1193,15 +1227,42 @@ const Hosting = () => {
                       setNote('');
                     }}
                     className="bg-gray-600 text-white text-sm font-medium px-4 py-2 rounded-md w-full hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                    disabled={loading}
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     className="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-md w-full hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center justify-center"
-                    disabled={Object.keys(formErrors).length > 0 || packagesLoading}
+                    disabled={Object.keys(formErrors).length > 0 || packagesLoading || loading}
                   >
-                    Save
+                    {loading ? (
+                      <>
+                        <svg
+                          className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          ></circle>
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          ></path>
+                        </svg>
+                        Saving...
+                      </>
+                    ) : (
+                      'Save'
+                    )}
                   </button>
                 </div>
               </form>
