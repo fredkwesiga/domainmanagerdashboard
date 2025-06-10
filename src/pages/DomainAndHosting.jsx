@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Tab } from '@headlessui/react';
 import {
   FiSearch,
-  FiX,
   FiEye,
   FiEdit,
   FiTrash,
@@ -31,41 +30,12 @@ const DomainAndHosting = () => {
   const [error, setError] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [selectedItem, setSelectedItem] = useState(null);
-  const [editForm, setEditForm] = useState(null);
+  const [editingDomain, setEditingDomain] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [note, setNote] = useState('');
   const [itemsPerPage] = useState(10);
-
-  // Option arrays for dropdowns
-  const currencyOptions = [
-    { value: 'USD', label: 'US Dollar' },
-    { value: 'EUR', label: 'Euro' },
-    { value: 'GBP', label: 'British Pound Sterling' },
-    { value: 'UGX', label: 'Ugandan Shilling' },
-  ];
-
-  const billingCycleOptions = [
-    { value: 'Monthly', label: 'Monthly' },
-    { value: 'Quarterly', label: 'Quarterly' },
-    { value: 'Yearly', label: 'Yearly' },
-  ];
-
-  const statusOptions = [
-    { value: 'Active', label: 'Active' },
-    { value: 'Expiring Soon', label: 'Expiring Soon' },
-    { value: 'Expired', label: 'Expired' },
-    { value: 'Cancelled', label: 'Cancelled' },
-  ];
-
-  const paymentMethodOptions = [
-    { value: '', label: 'Select payment method' },
-    { value: 'Credit Card', label: 'Credit Card' },
-    { value: 'PayPal', label: 'PayPal' },
-    { value: 'Bank Transfer', label: 'Bank Transfer' },
-  ];
 
   // Fetch data
   const fetchData = async () => {
@@ -80,18 +50,22 @@ const DomainAndHosting = () => {
           planName: item.planName,
           type: item.type,
           package: item.package,
-          cost: item.cost,
+          cost: Number(item.cost) || 0, // Ensure cost is a number, default to 0 if invalid
           currency: item.currency || 'USD',
           status: item.status,
           cycle: item.cycle,
           nextDueDate: item.nextDueDate,
           domain: item.domain,
-          customer: `${item.customer.firstName} ${item.customer.lastName}`.trim(),
-          customerEmail: item.customer.email,
-          customerPhone: item.customer.phone,
+          customer: {
+            firstName: item.customer.firstName,
+            lastName: item.customer.lastName,
+            email: item.customer.email,
+            phone: item.customer.phone || '',
+          },
           startDate: item.startDate,
           method: item.method,
           note: item.note || '',
+          invoiceStatus: item.invoiceSent || false,
         }));
         setData(formattedData);
         setFilteredData(formattedData);
@@ -156,7 +130,7 @@ const DomainAndHosting = () => {
   // Determine status dynamically
   const getStatus = (nextDueDate, status) => {
     if (status === 'Cancelled') {
-      return { text: 'Cancelled', color: 'bg-gray-100 text-gray-800' };
+      return { text: 'Redemption', color: 'bg-red-100 text-red-800' };
     }
     const now = new Date();
     const sevenDaysFromNow = new Date(now);
@@ -231,7 +205,7 @@ const DomainAndHosting = () => {
         (item) =>
           item.planName.toLowerCase().includes(searchQuery.toLowerCase()) ||
           item.domain.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          item.customer.toLowerCase().includes(searchQuery.toLowerCase())
+          `${item.customer.firstName} ${item.customer.lastName}`.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
 
@@ -261,8 +235,9 @@ const DomainAndHosting = () => {
 
   // Handle View action
   const handleView = (item) => {
-    setSelectedItem({
+    setEditingDomain({
       ...item,
+      invoiceStatus: item.invoiceStatus || false,
       note: item.note || '',
     });
     setShowModal(true);
@@ -272,30 +247,24 @@ const DomainAndHosting = () => {
 
   // Handle Edit action
   const handleEdit = (item) => {
-    setEditForm({
+    console.log('Editing item:', item); // Debug: Log item being edited
+    setEditingDomain({
       id: item.id,
-      planName: item.planName,
-      type: item.type,
-      package: item.package,
-      cost: item.cost,
-      currency: item.currency || 'USD',
-      status: item.status,
-      cycle: item.cycle,
-      nextDueDate: formatDateForInput(item.nextDueDate),
       domain: item.domain,
+      package: item.package,
+      cost: Number(item.cost) || 0, // Ensure cost is a number, default to 0 if invalid
       customer: {
-        firstName: item.customer.split(' ')[0] || '',
-        lastName: item.customer.split(' ').slice(1).join(' ') || '',
-        email: item.customerEmail,
-        phone: item.customerPhone || '',
+        firstName: item.customer.firstName || '',
+        lastName: item.customer.lastName || '',
+        email: item.customer.email || '',
+        phone: item.customer.phone || '',
       },
-      startDate: formatDateForInput(item.startDate),
-      method: item.method || '',
+      nextDueDate: formatDateForInput(item.nextDueDate),
+      invoiceStatus: item.invoiceStatus || false,
       note: item.note || '',
     });
     setNote(item.note || '');
     setShowNoteInput(!!item.note);
-    setSelectedItem(item);
     setShowEditModal(true);
     setShowModal(false);
     setDropdownOpen(null);
@@ -303,30 +272,35 @@ const DomainAndHosting = () => {
 
   // Handle Edit form changes
   const handleEditChange = (e, field, subField = null) => {
-    const { value } = e.target;
-    setEditForm((prev) => {
+    const { value, type, checked } = e.target;
+    const newValue = type === 'checkbox' ? checked : value;
+    setEditingDomain((prev) => {
       if (subField) {
         return {
           ...prev,
           [field]: {
             ...prev[field],
-            [subField]: value,
+            [subField]: newValue,
           },
         };
       }
       return {
         ...prev,
-        [field]: value,
+        [field]: newValue,
       };
     });
+    if (field === 'note') {
+      setNote(newValue);
+    }
   };
 
   // Handle Note changes
   const handleNoteChange = (e) => {
-    setNote(e.target.value);
-    setEditForm((prev) => ({
+    const value = e.target.value;
+    setNote(value);
+    setEditingDomain((prev) => ({
       ...prev,
-      note: e.target.value,
+      note: value,
     }));
   };
 
@@ -337,9 +311,9 @@ const DomainAndHosting = () => {
     }
     setLoading(true);
     try {
-      const updatedItem = { ...editForm, note: '' };
-      await editPackage(updatedItem, true); // Pass flag to trigger "Note has been removed" toast
-      setSelectedItem((prev) => ({ ...prev, note: '' }));
+      const updatedDomain = { ...editingDomain, note: '' };
+      await editPackage(updatedDomain, true); // Pass flag to trigger "Note has been removed" toast
+      setEditingDomain((prev) => ({ ...prev, note: '' }));
       setNote('');
       setShowNoteInput(false);
     } catch (err) {
@@ -353,45 +327,43 @@ const DomainAndHosting = () => {
   // Handle Edit submission
   const handleEditSubmit = async (e) => {
     e.preventDefault();
-    await editPackage({ ...editForm, note });
+    await editPackage({ ...editingDomain, note });
   };
 
   // Edit package via API
   const editPackage = async (pkg, isNoteRemoval = false) => {
     setLoading(true);
     try {
+      const payload = {
+        id: pkg.id,
+        domain: pkg.domain,
+        package: pkg.package,
+        cost: Number(pkg.cost) || 0, // Ensure cost is a number
+        customer: {
+          firstName: pkg.customer.firstName,
+          lastName: pkg.customer.lastName,
+          email: pkg.customer.email,
+          phone: pkg.customer.phone,
+        },
+        nextDueDate: pkg.nextDueDate,
+        invoiceStatus: pkg.invoiceStatus,
+        note: pkg.note,
+      };
+      console.log('Edit package payload:', payload); // Debug: Log payload
       const response = await fetch('https://goldenrod-cattle-809116.hostingersite.com/updatedomainandhosting.php', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: pkg.id,
-          planName: pkg.planName,
-          type: pkg.type,
-          package: pkg.package,
-          cost: parseFloat(pkg.cost),
-          currency: pkg.currency,
-          status: pkg.status,
-          cycle: pkg.cycle,
-          nextDueDate: pkg.nextDueDate,
-          domain: pkg.domain,
-          customer: {
-            firstName: pkg.customer.firstName,
-            lastName: pkg.customer.lastName,
-            email: pkg.customer.email,
-            phone: pkg.customer.phone,
-          },
-          startDate: pkg.startDate,
-          method: pkg.method,
-          note: pkg.note,
-        }),
+        body: JSON.stringify(payload),
       });
       const result = await response.json();
+      console.log('Edit package response:', result); // Debug: Log response
       if (result.status === 'success') {
         // Check if a note was added, updated, or removed
         const originalItem = data.find((item) => item.id === pkg.id);
         const wasNoteAdded = !originalItem.note && pkg.note;
         const wasNoteUpdated = originalItem.note && pkg.note && originalItem.note !== pkg.note;
         const wasNoteRemoved = originalItem.note && !pkg.note;
+        const wasInvoiceStatusChanged = originalItem.invoiceStatus !== pkg.invoiceStatus;
 
         // Show specific toast message
         if (isNoteRemoval || wasNoteRemoved) {
@@ -400,6 +372,8 @@ const DomainAndHosting = () => {
           toast.success('Note Added Successfully');
         } else if (wasNoteUpdated) {
           toast.success('Note Updated Successfully');
+        } else if (wasInvoiceStatusChanged) {
+          toast.success(`Invoice status updated to ${pkg.invoiceStatus ? 'Invoiced' : 'Not Invoiced'}`);
         } else {
           toast.success(result.message || 'Package updated successfully');
         }
@@ -408,20 +382,17 @@ const DomainAndHosting = () => {
           item.id === pkg.id
             ? {
                 ...item,
-                planName: pkg.planName,
-                type: pkg.type,
-                package: pkg.package,
-                cost: parseFloat(pkg.cost),
-                currency: pkg.currency,
-                status: pkg.status,
-                cycle: pkg.cycle,
-                nextDueDate: pkg.nextDueDate,
                 domain: pkg.domain,
-                customer: `${pkg.customer.firstName} ${pkg.customer.lastName}`.trim(),
-                customerEmail: pkg.customer.email,
-                customerPhone: pkg.customer.phone,
-                startDate: pkg.startDate,
-                method: pkg.method,
+                package: pkg.package,
+                cost: Number(pkg.cost) || 0,
+                customer: {
+                  firstName: pkg.customer.firstName,
+                  lastName: pkg.customer.lastName,
+                  email: pkg.customer.email,
+                  phone: pkg.customer.phone,
+                },
+                nextDueDate: pkg.nextDueDate,
+                invoiceStatus: pkg.invoiceStatus,
                 note: pkg.note,
               }
             : item
@@ -433,20 +404,17 @@ const DomainAndHosting = () => {
             item.id === pkg.id
               ? {
                   ...item,
-                  planName: pkg.planName,
-                  type: pkg.type,
-                  package: pkg.package,
-                  cost: parseFloat(pkg.cost),
-                  currency: pkg.currency,
-                  status: pkg.status,
-                  cycle: pkg.cycle,
-                  nextDueDate: pkg.nextDueDate,
                   domain: pkg.domain,
-                  customer: `${pkg.customer.firstName} ${pkg.customer.lastName}`.trim(),
-                  customerEmail: pkg.customer.email,
-                  customerPhone: pkg.customer.phone,
-                  startDate: pkg.startDate,
-                  method: pkg.method,
+                  package: pkg.package,
+                  cost: Number(pkg.cost) || 0,
+                  customer: {
+                    firstName: pkg.customer.firstName,
+                    lastName: pkg.customer.lastName,
+                    email: pkg.customer.email,
+                    phone: pkg.customer.phone,
+                  },
+                  nextDueDate: pkg.nextDueDate,
+                  invoiceStatus: pkg.invoiceStatus,
                   note: pkg.note,
                 }
               : item
@@ -458,7 +426,7 @@ const DomainAndHosting = () => {
         toast.error(result.message || 'Failed to update package');
       }
     } catch (err) {
-      toast.error('Failed to update package');
+      toast.error('Failed to update package: ' + err.message);
       console.error('Update error:', err);
     } finally {
       setLoading(false);
@@ -521,7 +489,6 @@ const DomainAndHosting = () => {
   const getPageNumbers = () => {
     const pageNumbers = [];
     const maxVisiblePages = 3;
-
     if (totalPages <= maxVisiblePages + 2) {
       for (let i = 1; i <= totalPages; i++) {
         pageNumbers.push(i);
@@ -666,7 +633,7 @@ const DomainAndHosting = () => {
                   }`
                 }
               >
-                Cancelled ({stats.cancelled})
+                Redemption ({stats.cancelled})
               </Tab>
             </Tab.List>
 
@@ -710,14 +677,14 @@ const DomainAndHosting = () => {
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="flex items-center">
                                     <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-medium">
-                                      {item.customer.charAt(0)}
+                                      {`${item.customer.firstName.charAt(0)}${item.customer.lastName.charAt(0)}`}
                                     </div>
                                     <div className="ml-4">
                                       <div className="text-sm font-medium text-gray-900">
-                                        {item.customer}
+                                        {`${item.customer.firstName} ${item.customer.lastName}`.trim()}
                                       </div>
                                       <div className="text-sm text-gray-500">
-                                        {item.customerEmail}
+                                        {item.customer.email}
                                       </div>
                                     </div>
                                   </div>
@@ -831,7 +798,7 @@ const DomainAndHosting = () => {
         </div>
 
         {/* View Modal */}
-        {showModal && selectedItem && (
+        {showModal && editingDomain && (
           <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
               <div className="bg-indigo-900 p-6">
@@ -859,12 +826,16 @@ const DomainAndHosting = () => {
                 </div>
                 <div className="mt-2 flex items-center">
                   <span
-                    className={`inline-flex items-center px-5 py-1 rounded-full text-xs font-medium ${getStatus(selectedItem.nextDueDate, selectedItem.status).color}`}
+                    className={`inline-flex items-center px-5 py-1 rounded-full text-xs font-medium ${
+                      getStatus(editingDomain.nextDueDate, editingDomain.status).text === 'Active'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-amber-100 text-amber-800'
+                    }`}
                   >
-                    {getStatus(selectedItem.nextDueDate, selectedItem.status).text}
+                    {getStatus(editingDomain.nextDueDate, editingDomain.status).text}
                   </span>
                   <span className="ml-2 text-xs text-white/90">
-                    {selectedItem.planName}
+                    {editingDomain.domain}
                   </span>
                 </div>
               </div>
@@ -897,15 +868,7 @@ const DomainAndHosting = () => {
                         ID
                       </span>
                       <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {selectedItem.id}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Plan Name
-                      </span>
-                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {selectedItem.planName}
+                        {editingDomain.id}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -913,7 +876,7 @@ const DomainAndHosting = () => {
                         Domain
                       </span>
                       <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {selectedItem.domain}
+                        {editingDomain.domain}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -921,31 +884,21 @@ const DomainAndHosting = () => {
                         Package
                       </span>
                       <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {selectedItem.package}
+                        {editingDomain.package}
                       </span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between items-center pt-1">
                       <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Cost
+                        Invoice Status
                       </span>
-                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {selectedItem.currency} {selectedItem.cost.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Billing Cycle
-                      </span>
-                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {selectedItem.cycle}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Payment Method
-                      </span>
-                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {selectedItem.method || 'N/A'}
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-medium ${
+                          editingDomain.invoiceStatus
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        {editingDomain.invoiceStatus ? 'Invoiced' : 'Not Invoiced'}
                       </span>
                     </div>
                   </div>
@@ -978,7 +931,7 @@ const DomainAndHosting = () => {
                         Name
                       </span>
                       <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {selectedItem.customer}
+                        {`${editingDomain.customer.firstName} ${editingDomain.customer.lastName}`.trim()}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -986,10 +939,10 @@ const DomainAndHosting = () => {
                         Email
                       </span>
                       <a
-                        href={`mailto:${selectedItem.customerEmail}`}
+                        href={`mailto:${editingDomain.customer.email}`}
                         className="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
                       >
-                        {selectedItem.customerEmail}
+                        {editingDomain.customer.email}
                       </a>
                     </div>
                     <div className="flex justify-between">
@@ -997,7 +950,7 @@ const DomainAndHosting = () => {
                         Phone
                       </span>
                       <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {selectedItem.customerPhone || 'N/A'}
+                        {editingDomain.customer.phone || 'N/A'}
                       </span>
                     </div>
                   </div>
@@ -1030,7 +983,7 @@ const DomainAndHosting = () => {
                         Start Date
                       </span>
                       <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {formatDate(selectedItem.startDate)}
+                        {formatDate(editingDomain.startDate)}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -1038,12 +991,12 @@ const DomainAndHosting = () => {
                         Next Due Date
                       </span>
                       <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {formatDate(selectedItem.nextDueDate)}
+                        {formatDate(editingDomain.nextDueDate)}
                       </span>
                     </div>
                   </div>
                 </div>
-                {selectedItem.note && (
+                {editingDomain.note && (
                   <div className="dark:bg-yellow-900/50 p-5 rounded-xl">
                     <div className="flex items-center mb-3">
                       <div className="bg-yellow-100 dark:bg-yellow-900/50 p-2 rounded-lg mr-3">
@@ -1073,7 +1026,7 @@ const DomainAndHosting = () => {
                       </h3>
                     </div>
                     <p className="text-sm text-gray-600 dark:text-gray-300">
-                      {selectedItem.note}
+                      {editingDomain.note}
                     </p>
                   </div>
                 )}
@@ -1092,248 +1045,154 @@ const DomainAndHosting = () => {
         )}
 
         {/* Edit Modal */}
-        {showEditModal && editForm && (
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50">
+        {showEditModal && editingDomain && (
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 backdrop-blur-sm z-50 flex items-center justify-center">
             <div className="bg-white p-6 rounded-lg shadow-lg w-[600px] max-h-[90vh] overflow-y-auto">
               <h2 className="text-lg mb-4">Edit Package</h2>
-              <button
-                onClick={() => setShowEditModal(false)}
-                className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 focus:outline-none"
-              >
-                <FiX size={20} />
-              </button>
               <form onSubmit={handleEditSubmit}>
-                <div className="space-y-6">
-                  {/* Package Info */}
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
-                      Package Information
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Plan Name</label>
-                        <input
-                          type="text"
-                          value={editForm.planName}
-                          onChange={(e) => handleEditChange(e, 'planName')}
-                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Domain</label>
-                        <input
-                          type="text"
-                          value={editForm.domain}
-                          onChange={(e) => handleEditChange(e, 'domain')}
-                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Package</label>
-                        <input
-                          type="text"
-                          value={editForm.package}
-                          onChange={(e) => handleEditChange(e, 'package')}
-                          className="mt-1 block w-full border bg-gray-100 rounded-lg px-4 py-2 text-xs font-semibold text-gray-700"
-                          disabled
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Status</label>
-                        <select
-                          value={editForm.status}
-                          onChange={(e) => handleEditChange(e, 'status')}
-                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          required
-                        >
-                          {statusOptions.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700">
+                    Domain
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full mt-1 p-2 border text-xs font-semibold rounded-md bg-gray-100"
+                    value={editingDomain.domain}
+                    disabled
+                  />
+                </div>
 
-                  {/* Customer Info */}
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
-                      Customer Information
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">First Name</label>
-                        <input
-                          type="text"
-                          value={editForm.customer.firstName}
-                          onChange={(e) => handleEditChange(e, 'customer', 'firstName')}
-                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Last Name</label>
-                        <input
-                          type="text"
-                          value={editForm.customer.lastName}
-                          onChange={(e) => handleEditChange(e, 'customer', 'lastName')}
-                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Email</label>
-                        <input
-                          type="email"
-                          value={editForm.customer.email}
-                          onChange={(e) => handleEditChange(e, 'customer', 'email')}
-                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Phone (optional)</label>
-                        <input
-                          type="tel"
-                          value={editForm.customer.phone}
-                          onChange={(e) => handleEditChange(e, 'customer', 'phone')}
-                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        />
-                      </div>
-                    </div>
+                <div className="flex w-full justify-between gap-5">
+                  <div className="mb-4 w-full">
+                    <label className="block text-xs font-medium text-gray-700">
+                      Customer First Name
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full mt-1 p-2 text-xs border rounded-md"
+                      value={editingDomain.customer.firstName}
+                      onChange={(e) => handleEditChange(e, 'customer', 'firstName')}
+                      required
+                    />
                   </div>
-
-                  {/* Package Plan */}
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
-                      Package Plan
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Cost</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={editForm.cost}
-                          onChange={(e) => handleEditChange(e, 'cost')}
-                          className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Currency</label>
-                        <select
-                          value={editForm.currency}
-                          onChange={(e) => handleEditChange(e, 'currency')}
-                          className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          required
-                        >
-                          {currencyOptions.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Billing Cycle</label>
-                        <select
-                          value={editForm.cycle}
-                          onChange={(e) => handleEditChange(e, 'cycle')}
-                          className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          required
-                        >
-                          {billingCycleOptions.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Payment Method (optional)</label>
-                        <select
-                          value={editForm.method}
-                          onChange={(e) => handleEditChange(e, 'method')}
-                          className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                        >
-                          {paymentMethodOptions.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Dates */}
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
-                      Package Dates
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Start Date</label>
-                        <input
-                          type="date"
-                          value={editForm.startDate}
-                          onChange={(e) => handleEditChange(e, 'startDate')}
-                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Next Due Date</label>
-                        <input
-                          type="date"
-                          value={editForm.nextDueDate}
-                          onChange={(e) => handleEditChange(e, 'nextDueDate')}
-                          className="mt-1 block w-full border border-gray-200 rounded-lg px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          required
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Note Section */}
-                  <div className="space-y-4">
-                    <button
-                      type="button"
-                      onClick={() => setShowNoteInput(!showNoteInput)}
-                      className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center"
-                    >
-                      <FiEdit2 className="mr-1" size={14} /> {showNoteInput ? 'Hide Note' : 'Add Note'}
-                    </button>
-                    {showNoteInput && (
-                      <div className="mt-2">
-                        <label className="block text-xs font-medium text-gray-700">Note</label>
-                        <textarea
-                          value={note}
-                          onChange={handleNoteChange}
-                          className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          rows="3"
-                          placeholder="e.g., Invoice was sent but email bounced"
-                        />
-                      </div>
-                    )}
+                  <div className="mb-4 w-full">
+                    <label className="block text-xs font-medium text-gray-700">
+                      Customer Last Name
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full mt-1 p-2 text-xs border rounded-md"
+                      value={editingDomain.customer.lastName}
+                      onChange={(e) => handleEditChange(e, 'customer', 'lastName')}
+                      required
+                    />
                   </div>
                 </div>
-                <div className="mt-6 flex w-full justify-between gap-5">
+
+                <div className="flex w-full justify-between gap-5">
+                  <div className="mb-4 w-full">
+                    <label className="block text-xs font-medium text-gray-700">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      className="w-full mt-1 p-2 text-xs border rounded-md"
+                      value={editingDomain.customer.email}
+                      onChange={(e) => handleEditChange(e, 'customer', 'email')}
+                      required
+                    />
+                  </div>
+                  <div className="mb-4 w-full">
+                    <label className="block text-xs font-medium text-gray-700">
+                      Phone
+                    </label>
+                    <input
+                      type="tel"
+                      className="w-full mt-1 p-2 text-xs border rounded-md"
+                      value={editingDomain.customer.phone}
+                      onChange={(e) => handleEditChange(e, 'customer', 'phone')}
+                    />
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700">
+                    Next Due Date
+                  </label>
+                  <input
+                    type="date"
+                    className="w-full mt-1 p-2 text-xs border rounded-md"
+                    value={editingDomain.nextDueDate}
+                    onChange={(e) => handleEditChange(e, 'nextDueDate')}
+                    required
+                  />
+                </div>
+
+                <div className="mb-4 w-full">
+                  <label className="block text-xs font-medium text-gray-700 mb-2">
+                    Invoice Status
+                  </label>
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                      checked={editingDomain.invoiceStatus}
+                      onChange={(e) => handleEditChange(e, 'invoiceStatus')}
+                    />
+                    <span className="ml-2 text-xs text-gray-700">
+                      {editingDomain.invoiceStatus ? 'Invoiced' : 'Not Invoiced'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mb-4 w-full">
                   <button
                     type="button"
+                    onClick={() => setShowNoteInput(!showNoteInput)}
+                    className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center"
+                  >
+                    <FiEdit2 className="mr-1" size={14} /> {editingDomain.note ? 'Edit Note' : 'Add Note'}
+                  </button>
+                  {showNoteInput && (
+                    <div className="mt-2">
+                      <textarea
+                        className="w-full mt-1 p-2 text-xs border rounded-md"
+                        value={editingDomain.note}
+                        onChange={handleNoteChange}
+                        rows="3"
+                        placeholder="e.g., Invoice was sent but email bounced"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700">
+                    Package
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full mt-1 p-2 text-xs font-semibold border rounded-md bg-gray-100 uppercase"
+                    value={editingDomain.package}
+                    disabled
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    To change the package, please contact customer service.
+                  </p>
+                </div>
+
+                <div className="mt-4 w-full justify-between flex gap-5">
+                  <button
+                    type="button"
+                    className="ml-2 bg-gray-600 text-xs font-semibold text-white px-4 py-2 rounded-md w-full"
                     onClick={() => setShowEditModal(false)}
-                    className="bg-gray-600 text-white text-sm font-medium px-4 py-2 rounded-md w-full hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
                     disabled={loading}
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-md w-full hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center justify-center"
+                    className="bg-indigo-900 text-xs font-semibold text-white px-4 py-2 rounded-md w-full flex items-center justify-center"
                     disabled={loading}
                   >
                     {loading ? (
