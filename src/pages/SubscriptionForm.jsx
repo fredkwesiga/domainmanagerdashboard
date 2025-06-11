@@ -25,7 +25,7 @@ const SubscriptionForm = ({ initialData, onCancel }) => {
     package: "",
     amount: 0,
     currency: "USD",
-    billingCycle: "",
+    cycle: "",
     domain: "",
     paymentMethod: "",
   });
@@ -92,7 +92,7 @@ const SubscriptionForm = ({ initialData, onCancel }) => {
         package: initialData.package || "",
         amount: initialData.amount || 0,
         currency: initialData.currency || "USD",
-        billingCycle: initialData.billingCycle || "",
+        cycle: initialData.cycle || "",
         domain: initialData.domain || "",
         paymentMethod: initialData.paymentMethod || "",
       });
@@ -241,6 +241,7 @@ const SubscriptionForm = ({ initialData, onCancel }) => {
     }
 
     const submissionData = {
+      
       subscriptionName: formData.subscriptionName,
       subscriptionType: formData.subscriptionType,
       customer: {
@@ -256,10 +257,11 @@ const SubscriptionForm = ({ initialData, onCancel }) => {
       package: formData.package,
       amount: parseFloat(formData.amount),
       currency: formData.currency,
-      billingCycle: formData.billingCycle,
+      billingCycle: formData.cycle,
       domain: formData.domain || "", // Optional
       paymentMethod: formData.paymentMethod || "", // Optional
     };
+    console.log("Final submission data:", submissionData);
 
     try {
       const response = await fetch(
@@ -293,7 +295,7 @@ const SubscriptionForm = ({ initialData, onCancel }) => {
           package: "",
           amount: 0,
           currency: "USD",
-          billingCycle: "",
+          cycle: "",
           domain: "",
           paymentMethod: "",
         });
@@ -364,10 +366,10 @@ const SubscriptionForm = ({ initialData, onCancel }) => {
   ];
 
   const billingCycleOptions = [
-    { value: "monthly", label: "Monthly" },
-    { value: "quarterly", label: "Quarterly" },
-    { value: "yearly", label: "Yearly" },
-  ];
+  { value: "Monthly", label: "Monthly" },
+  { value: "Quarterly", label: "Quarterly" },
+  { value: "Yearly", label: "Yearly" },
+];
 
   const paymentMethodOptions = [
     { value: "", label: "Select payment method" },
@@ -512,8 +514,8 @@ const SubscriptionForm = ({ initialData, onCancel }) => {
             </div>
             <Select
               label="Billing Cycle"
-              name="billingCycle"
-              value={formData.billingCycle}
+              name="cycle"
+              value={formData.cycle}
               onChange={handleChange}
               options={billingCycleOptions}
               required

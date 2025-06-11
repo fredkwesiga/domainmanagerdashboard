@@ -39,21 +39,21 @@ const Subscription = () => {
       if (data.status === 'success') {
         const subscriptions = data.data.map(item => ({
           id: item.id,
-          planName: item.planName,
-          type: item.type,
-          cost: item.cost,
+          planName: item.planName || '',
+          cost: item.cost || 0,
           currency: item.currency || 'USD',
-          status: item.status,
-          cycle: item.cycle,
-          nextDueDate: item.nextDueDate,
-          domain: item.domain,
+          status: item.status || '',
+          cycle: item.cycle || '',
+          nextDueDate: item.nextDueDate || '',
+          domain: item.domain || '',
           customer: `${item.customer.firstName} ${item.customer.lastName}`.trim(),
-          customerEmail: item.customer.email,
-          customerPhone: item.customer.phone,
-          startDate: item.startDate,
-          method: item.method,
+          customerEmail: item.customer.email || '',
+          customerPhone: item.customer.phone || '',
+          startDate: item.startDate || '',
+          method: item.method || '',
           note: item.note || '',
         }));
+        console.log('Fetched subscriptions:', subscriptions); // Debug log
         setSubscriptionData(subscriptions);
         setFilteredData(subscriptions);
         calculateStats(subscriptions);
@@ -84,14 +84,14 @@ const Subscription = () => {
     let expiring7Days = 0;
     let expiring30Days = 0;
     let expiredCount = 0;
-    let cancelledCount = 0;
+    let redemptionCount = 0;
 
     data.forEach((item) => {
       const dueDate = new Date(item.nextDueDate);
       const daysSinceDue = Math.floor((now - dueDate) / (1000 * 60 * 60 * 24));
 
-      if (item.status === 'Cancelled') {
-        cancelledCount++;
+      if (item.status === 'Redemption') {
+        redemptionCount++;
       } else if (daysSinceDue > 0) {
         expiredCount++;
       } else if (dueDate <= sevenDaysFromNow && dueDate > now) {
@@ -109,13 +109,13 @@ const Subscription = () => {
       expiring7Days,
       expiring30Days,
       expired: expiredCount,
-      cancelled: cancelledCount,
+      cancelled: redemptionCount,
     });
   };
 
   const getStatus = (nextDueDate, status) => {
-    if (status === 'Cancelled') {
-      return { text: 'Cancelled', color: 'bg-gray-100 text-gray-800' };
+    if (status === 'Redemption') {
+      return { text: 'Redemption', color: 'bg-red-100 text-red-800' };
     }
     const now = new Date();
     const sevenDaysFromNow = new Date(now);
@@ -217,6 +217,7 @@ const Subscription = () => {
     setSelectedSubscription({
       ...subscription,
       note: subscription.note || '',
+      invoiceStatus: subscription.invoiceStatus || false,
     });
     setShowModal(true);
     setShowEditModal(false);
@@ -228,7 +229,7 @@ const Subscription = () => {
     setEditForm({
       id: subscription.id || 0,
       planName: subscription.planName || '',
-      type: subscription.type || '',
+      type: subscription.type || 'N/A', // Use actual type with fallback
       cost: subscription.cost || 0,
       currency: subscription.currency || 'USD',
       status: subscription.status || 'Active',
@@ -236,14 +237,15 @@ const Subscription = () => {
       nextDueDate: formatDateForInput(subscription.nextDueDate) || '',
       domain: subscription.domain || '',
       customer: {
-        firstName: subscription.customer ? subscription.customer.split(' ')[0] || '' : '',
-        lastName: subscription.customer ? subscription.customer.split(' ').slice(1).join(' ') || '' : '',
+        firstName: subscription.customer.split(' ')[0] || '',
+        lastName: subscription.customer.split(' ').slice(1).join(' ') || '',
         email: subscription.customerEmail || '',
         phone: subscription.customerPhone || '',
       },
       startDate: formatDateForInput(subscription.startDate) || '',
       method: subscription.method || '',
       note: subscription.note || '',
+      invoiceStatus: subscription.invoiceStatus || false,
     });
     setNote(subscription.note || '');
     setShowNoteInput(!!subscription.note);
@@ -287,7 +289,7 @@ const Subscription = () => {
     setLoading(true);
     try {
       const updatedSubscription = { ...editForm, note: '' };
-      await editSubscription(updatedSubscription, true); // Pass flag to trigger "Note has been removed" toast
+      await editSubscription(updatedSubscription, true);
       setSelectedSubscription((prev) => ({ ...prev, note: '' }));
       setNote('');
       setShowNoteInput(false);
@@ -312,17 +314,35 @@ const Subscription = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(subscription),
+        body: JSON.stringify({
+          id: subscription.id,
+          planName: subscription.planName,
+          type: subscription.type,
+          cost: subscription.cost,
+          currency: subscription.currency,
+          status: subscription.status,
+          cycle: subscription.cycle,
+          nextDueDate: subscription.nextDueDate,
+          domain: subscription.domain,
+          customer: {
+            firstName: subscription.customer.firstName,
+            lastName: subscription.customer.lastName,
+            email: subscription.customer.email,
+            phone: subscription.customer.phone,
+          },
+          startDate: subscription.startDate,
+          method: subscription.method,
+          note: subscription.note,
+          invoiceStatus: subscription.invoiceStatus,
+        }),
       });
       const result = await response.json();
       if (result.status === 'success') {
-        // Check if a note was added, updated, or removed
         const originalSubscription = subscriptionData.find((item) => item.id === subscription.id);
         const wasNoteAdded = !originalSubscription.note && subscription.note;
         const wasNoteUpdated = originalSubscription.note && subscription.note && originalSubscription.note !== subscription.note;
         const wasNoteRemoved = originalSubscription.note && !subscription.note;
 
-        // Show specific toast message
         if (isNoteRemoval || wasNoteRemoved) {
           toast.success('Note has been removed');
         } else if (wasNoteAdded) {
@@ -351,6 +371,7 @@ const Subscription = () => {
                 startDate: subscription.startDate,
                 method: subscription.method,
                 note: subscription.note,
+                invoiceStatus: subscription.invoiceStatus,
               }
             : item
         );
@@ -375,6 +396,7 @@ const Subscription = () => {
                   startDate: subscription.startDate,
                   method: subscription.method,
                   note: subscription.note,
+                  invoiceStatus: subscription.invoiceStatus,
                 }
               : item
           )
@@ -477,10 +499,11 @@ const Subscription = () => {
   };
 
   const subscriptionTypeOptions = [
-    { value: 'basic', label: 'Basic Subscription' },
-    { value: 'standard', label: 'Standard Subscription' },
-    { value: 'premium', label: 'Premium Subscription' },
-    { value: 'enterprise', label: 'Enterprise Subscription' },
+    { value: 'N/A', label: 'N/A' },
+    { value: 'monthly', label: 'Monthly' },
+    { value: 'quarterly', label: 'Quarterly' },
+    { value: 'annual', label: 'Annual' },
+    { value: 'enterprise', label: 'Enterprise' },
   ];
 
   const currencyOptions = [
@@ -618,7 +641,7 @@ const Subscription = () => {
                   }`
                 }
               >
-                Cancelled ({stats.cancelled})
+                Redemption ({stats.cancelled})
               </Tab>
             </Tab.List>
 
@@ -654,6 +677,7 @@ const Subscription = () => {
                         {currentItems.length > 0 ? (
                           currentItems.map((item) => {
                             const status = getStatus(item.nextDueDate, item.status);
+                            console.log('Rendering item:', item); // Debug log
                             return (
                               <tr key={item.id}>
                                 <td className="px-6 py-4 whitespace-nowrap">
@@ -678,7 +702,7 @@ const Subscription = () => {
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                  {item.type}
+                                  {item.cycle} 
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                   {item.currency} {item.cost.toFixed(2)}
@@ -787,540 +811,454 @@ const Subscription = () => {
           </div>
         </div>
 
-        {showModal && selectedSubscription && (
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-              <div className="bg-indigo-900 p-6">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-2xl font-bold text-white">Subscription Details</h2>
-                  <button
-                    onClick={() => setShowModal(false)}
-                    className="text-white/80 hover:text-white transition-colors"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-6 w-6"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
-                </div>
-                <div className="mt-2 flex items-center">
-                  <span
-                    className={`inline-flex items-center px-5 py-1 rounded-full text-xs font-medium ${getStatus(selectedSubscription.nextDueDate, selectedSubscription.status).color}`}
-                  >
-                    {getStatus(selectedSubscription.nextDueDate, selectedSubscription.status).text}
-                  </span>
-                  <span className="ml-2 text-xs text-white/90">
-                    {selectedSubscription.planName}
-                  </span>
-                </div>
-              </div>
+       {showModal && selectedSubscription && (
+  <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+      <div className="bg-indigo-900 p-6">
+        <div className="flex justify-between items-center">
+          <h2 className="text-2xl font-bold text-white">Subscription Details</h2>
+          <button
+            onClick={() => setShowModal(false)}
+            className="text-white/80 hover:text-white transition-colors"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-6 w-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+        <div className="mt-2 flex items-center">
+          <span
+            className={`inline-flex items-center px-5 py-1 rounded-full text-xs font-medium ${getStatus(selectedSubscription.nextDueDate, selectedSubscription.status).color}`}
+          >
+            {getStatus(selectedSubscription.nextDueDate, selectedSubscription.status).text}
+          </span>
+          <span className="ml-2 text-xs text-white/90">
+            {selectedSubscription.planName}
+          </span>
+        </div>
+      </div>
 
-              <div className="p-6 space-y-6 max-h-[65vh] overflow-y-auto">
-                <div className="dark:bg-indigo-900 p-5 rounded-xl">
-                  <div className="flex items-center mb-3">
-                    <div className="bg-indigo-100 dark:bg-indigo-900/50 p-2 rounded-lg mr-3">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-5 w-5 text-indigo-600 dark:text-indigo-400"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-                        />
-                      </svg>
-                    </div>
-                    <h3 className="font-semibold text-gray-800 dark:text-gray-100">
-                      Subscription Information
-                    </h3>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Plan Name
-                      </span>
-                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {selectedSubscription.planName}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Type
-                      </span>
-                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {selectedSubscription.type}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Domain
-                      </span>
-                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {selectedSubscription.domain}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Cost
-                      </span>
-                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {selectedSubscription.currency} {selectedSubscription.cost.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Billing Cycle
-                      </span>
-                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {selectedSubscription.cycle}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Payment Method
-                      </span>
-                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {selectedSubscription.method || 'N/A'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="dark:bg-indigo-900 p-5 rounded-xl">
-                  <div className="flex items-center mb-3">
-                    <div className="bg-purple-100 dark:bg-purple-900/50 p-2 rounded-lg mr-3">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-5 w-5 text-purple-600 dark:text-purple-400"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                        />
-                      </svg>
-                    </div>
-                    <h3 className="font-semibold text-gray-800 dark:text-gray-100">
-                      Customer Information
-                    </h3>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Name
-                      </span>
-                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {selectedSubscription.customer}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Email
-                      </span>
-                      <a
-                        href={`mailto:${selectedSubscription.customerEmail}`}
-                        className="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
-                      >
-                        {selectedSubscription.customerEmail}
-                      </a>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Phone
-                      </span>
-                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {selectedSubscription.customerPhone || 'N/A'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="dark:bg-indigo-900 p-5 rounded-xl">
-                  <div className="flex items-center mb-3">
-                    <div className="bg-indigo-100 dark:bg-indigo-900/50 p-2 rounded-lg mr-3">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-5 w-5 text-indigo-600 dark:text-indigo-400"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                        />
-                      </svg>
-                    </div>
-                    <h3 className="font-semibold text-gray-800 dark:text-gray-100">
-                      Subscription Dates
-                    </h3>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Start Date
-                      </span>
-                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {formatDate(selectedSubscription.startDate)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Next Due Date
-                      </span>
-                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {formatDate(selectedSubscription.nextDueDate)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {selectedSubscription.note && (
-                  <div className="dark:bg-yellow-900/50 p-5 rounded-xl">
-                    <div className="flex items-center mb-3">
-                      <div className="bg-yellow-100 dark:bg-yellow-900/50 p-2 rounded-lg mr-3">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-5 w-5 text-yellow-600 dark:text-yellow-400"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                          />
-                        </svg>
-                      </div>
-                      <h3 className="font-semibold text-gray-800 dark:text-gray-100 flex items-center justify-between w-full">
-                        Note
-                        <button
-                          onClick={handleRemoveNote}
-                          className="text-red-600 hover:text-red-800 text-sm flex items-center"
-                        >
-                          <FiTrash className="mr-1" size={14} /> Remove
-                        </button>
-                      </h3>
-                    </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">
-                      {selectedSubscription.note}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div className="px-6 pb-6">
-                <button
-                  type="button"
-                  className="w-full bg-indigo-900 text-xs font-semibold text-white font-medium py-3 px-4 rounded-xl transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
-                  onClick={() => setShowModal(false)}
-                >
-                  Close Overview
-                </button>
-              </div>
+      <div className="p-6 space-y-6 max-h-[65vh] overflow-y-auto">
+        <div className="dark:bg-indigo-900 p-5 rounded-xl">
+          <div className="flex items-center mb-3">
+            <div className="bg-indigo-100 dark:bg-indigo-900/50 p-2 rounded-lg mr-3">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5 text-indigo-600 dark:text-indigo-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                />
+              </svg>
+            </div>
+            <h3 className="font-semibold text-gray-800 dark:text-gray-100">
+              Subscription Information
+            </h3>
+          </div>
+          <div className="space-y-3">
+            <div className="flex justify-between">
+              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Plan Name
+              </span>
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                {selectedSubscription.planName}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Type
+              </span>
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                {selectedSubscription.cycle}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Domain
+              </span>
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                {selectedSubscription.domain}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Cost
+              </span>
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                {selectedSubscription.currency} {selectedSubscription.cost.toFixed(2)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Billing Cycle
+              </span>
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                {selectedSubscription.cycle}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Payment Method
+              </span>
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                {selectedSubscription.method || 'N/A'}
+              </span>
+            </div>
+            <div className="flex justify-between items-center pt-1">
+              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Invoice Status
+              </span>
+              <span
+                className={`px-2 py-1 rounded text-xs font-medium ${
+                  selectedSubscription.invoiceStatus
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-amber-100 text-amber-800'
+                }`}
+              >
+                {selectedSubscription.invoiceStatus ? 'Invoiced' : 'Pending'}
+              </span>
             </div>
           </div>
+        </div>
+
+        <div className="dark:bg-indigo-900 p-5 rounded-xl">
+          <div className="flex items-center mb-3">
+            <div className="bg-purple-100 dark:bg-purple-900/50 p-2 rounded-lg mr-3">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5 text-purple-600 dark:text-purple-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                />
+              </svg>
+            </div>
+            <h3 className="font-semibold text-gray-800 dark:text-gray-100">
+              Customer Information
+            </h3>
+          </div>
+          <div className="space-y-3">
+            <div className="flex justify-between">
+              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Name
+              </span>
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                {selectedSubscription.customer}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Email
+              </span>
+              <a
+                href={`mailto:${selectedSubscription.customerEmail}`}
+                className="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+              >
+                {selectedSubscription.customerEmail}
+              </a>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Phone
+              </span>
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                {selectedSubscription.customerPhone || 'N/A'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="dark:bg-indigo-900 p-5 rounded-xl">
+          <div className="flex items-center mb-3">
+            <div className="bg-indigo-100 dark:bg-indigo-900/50 p-2 rounded-lg mr-3">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5 text-indigo-600 dark:text-indigo-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
+            </div>
+            <h3 className="font-semibold text-gray-800 dark:text-gray-100">
+              Subscription Dates
+            </h3>
+          </div>
+          <div className="space-y-3">
+            <div className="flex justify-between">
+              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Start Date
+              </span>
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                {formatDate(selectedSubscription.startDate)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Next Due Date
+              </span>
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                {formatDate(selectedSubscription.nextDueDate)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {selectedSubscription.note && (
+          <div className="dark:bg-yellow-900/50 p-5 rounded-xl">
+            <div className="flex items-center mb-3">
+              <div className="bg-yellow-100 dark:bg-yellow-900/50 p-2 rounded-lg mr-3">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5 text-yellow-600 dark:text-yellow-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </div>
+              <h3 className="font-semibold text-gray-800 dark:text-gray-100 flex items-center justify-between w-full">
+                Note
+                <button
+                  onClick={handleRemoveNote}
+                  className="text-red-600 hover:text-red-800 text-sm flex items-center"
+                >
+                  <FiTrash className="mr-1" size={14} /> Remove
+                </button>
+              </h3>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              {selectedSubscription.note}
+            </p>
+          </div>
         )}
+      </div>
+
+      <div className="px-6 pb-6">
+        <button
+          type="button"
+          className="w-full bg-indigo-900 text-xs font-semibold text-white font-medium py-3 px-4 rounded-xl transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
+          onClick={() => setShowModal(false)}
+        >
+          Close Overview
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
         {showEditModal && editForm && (
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="bg-white p-6 rounded-lg shadow-lg w-[600px] max-h-[90vh] overflow-y-auto">
-              <h2 className="text-lg mb-4">Edit Subscription</h2>
-              <button
-                onClick={() => setShowEditModal(false)}
-                className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 focus:outline-none"
-              >
-                <FiX size={20} />
-              </button>
-              <form onSubmit={handleEditSubmit}>
-                <div className="space-y-6">
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
-                      Subscription Information
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Service Name</label>
-                        <input
-                          type="text"
-                          value={editForm.planName}
-                          onChange={(e) => handleEditChange(e, 'planName')}
-                          className="w-full mt-1 p-2 border bg-gray-100 rounded-md px-2 py-1.5 text-xs font-semibold text-gray-700"
-                          disabled
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Domain</label>
-                        <input
-                          type="text"
-                          value={editForm.domain}
-                          onChange={(e) => handleEditChange(e, 'domain')}
-                          className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Subscription Type</label>
-                        <select
-                          value={editForm.type}
-                          onChange={(e) => handleEditChange(e, 'type')}
-                          className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          required
-                        >
-                          {subscriptionTypeOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Status</label>
-                        <select
-                          value={editForm.status}
-                          onChange={(e) => handleEditChange(e, 'status')}
-                          className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          required
-                        >
-                          {statusOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
+  <div className="fixed inset-0 bg-gray-600 bg-opacity-50 backdrop-blur-sm z-50 flex items-center justify-center">
+    <div className="bg-white p-6 rounded-lg shadow-lg w-[600px] max-h-[90vh] overflow-y-auto">
+      <h2 className="text-lg mb-4">Edit Subscription</h2>
+      <form
+        onSubmit={handleEditSubmit}
+      >
+        <div className="mb-4">
+          <label className="block text-xs font-medium text-gray-700">
+            Plan Name
+          </label>
+          <input
+            type="text"
+            className="w-full mt-1 p-2 border text-xs font-semibold rounded-md bg-gray-100"
+            value={editForm.planName}
+            disabled
+          />
+        </div>
 
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
-                      Customer Information
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">First Name</label>
-                        <input
-                          type="text"
-                          value={editForm.customer.firstName}
-                          onChange={(e) => handleEditChange(e, 'customer', 'firstName')}
-                          className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Last Name</label>
-                        <input
-                          type="text"
-                          value={editForm.customer.lastName}
-                          onChange={(e) => handleEditChange(e, 'customer', 'lastName')}
-                          className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Email</label>
-                        <input
-                          type="email"
-                          value={editForm.customer.email}
-                          onChange={(e) => handleEditChange(e, 'customer', 'email')}
-                          className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Phone (optional)</label>
-                        <input
-                          type="tel"
-                          value={editForm.customer.phone}
-                          onChange={(e) => handleEditChange(e, 'customer', 'phone')}
-                          className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
-                      Subscription Plan
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Cost</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={editForm.cost}
-                          onChange={(e) => handleEditChange(e, 'cost')}
-                          className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Currency</label>
-                        <select
-                          value={editForm.currency}
-                          onChange={(e) => handleEditChange(e, 'currency')}
-                          className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          required
-                        >
-                          {currencyOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Billing Cycle</label>
-                        <select
-                          value={editForm.cycle}
-                          onChange={(e) => handleEditChange(e, 'cycle')}
-                          className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          required
-                        >
-                          {billingCycleOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Payment Method (optional)</label>
-                        <select
-                          value={editForm.method}
-                          onChange={(e) => handleEditChange(e, 'method')}
-                          className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                        >
-                          {paymentMethodOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
-                      Subscription Dates
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Start Date</label>
-                        <input
-                          type="date"
-                          value={editForm.startDate}
-                          onChange={(e) => handleEditChange(e, 'startDate')}
-                          className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700">Next Due Date</label>
-                        <input
-                          type="date"
-                          value={editForm.nextDueDate}
-                          onChange={(e) => handleEditChange(e, 'nextDueDate')}
-                          className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          required
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <button
-                      type="button"
-                      onClick={() => setShowNoteInput(!showNoteInput)}
-                      className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center"
-                    >
-                      <FiEdit2 className="mr-1" size={14} /> {showNoteInput ? 'Hide Note' : 'Add Note'}
-                    </button>
-                    {showNoteInput && (
-                      <div className="mt-2">
-                        <label className="block text-xs font-medium text-gray-700">Note</label>
-                        <textarea
-                          value={note}
-                          onChange={handleNoteChange}
-                          className="w-full mt-1 p-2 border border-gray-300 rounded-md px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                          rows="3"
-                          placeholder="e.g., Invoice was sent but email bounced"
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="mt-4 flex justify-end space-x-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowEditModal(false)}
-                    className="bg-gray-600 text-white text-sm font-medium px-4 py-2 rounded-md w-full hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-                    disabled={loading}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-md w-full hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center justify-center"
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <>
-                        <svg
-                          className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          ></circle>
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          ></path>
-                        </svg>
-                        Saving...
-                      </>
-                    ) : (
-                      'Save'
-                    )}
-                  </button>
-                </div>
-              </form>
-            </div>
+        <div className="flex w-full justify-between gap-5">
+          <div className="mb-4 w-full">
+            <label className="block text-xs font-medium text-gray-700">
+              Customer First Name
+            </label>
+            <input
+              type="text"
+              className="w-full mt-1 p-2 text-xs border rounded-md"
+              value={editForm.customer.firstName}
+              onChange={(e) => handleEditChange(e, 'customer', 'firstName')}
+              required
+            />
           </div>
-        )}
+          <div className="mb-4 w-full">
+            <label className="block text-xs font-medium text-gray-700">
+              Customer Last Name
+            </label>
+            <input
+              type="text"
+              className="w-full mt-1 p-2 text-xs border rounded-md"
+              value={editForm.customer.lastName}
+              onChange={(e) => handleEditChange(e, 'customer', 'lastName')}
+              required
+            />
+          </div>
+        </div>
+
+        <div className="flex w-full justify-between gap-5">
+          <div className="mb-4 w-full">
+            <label className="block text-xs font-medium text-gray-700">
+              Email
+            </label>
+            <input
+              type="email"
+              className="w-full mt-1 p-2 text-xs border rounded-md"
+              value={editForm.customer.email}
+              onChange={(e) => handleEditChange(e, 'customer', 'email')}
+              required
+            />
+          </div>
+          <div className="mb-4 w-full">
+            <label className="block text-xs font-medium text-gray-700">
+              Phone
+            </label>
+            <input
+              type="tel"
+              className="w-full mt-1 p-2 text-xs border rounded-md"
+              value={editForm.customer.phone}
+              onChange={(e) => handleEditChange(e, 'customer', 'phone')}
+            />
+          </div>
+        </div>
+
+        <div className="flex w-full justify-between gap-5">
+          <div className="mb-4 w-full">
+            <label className="block text-xs font-medium text-gray-700">
+              Next Due Date
+            </label>
+            <input
+              type="date"
+              className="w-full mt-1 p-2 text-xs border rounded-md"
+              value={editForm.nextDueDate}
+              onChange={(e) => handleEditChange(e, 'nextDueDate')}
+              required
+            />
+          </div>
+        </div>
+
+        <div className="mb-4 w-full">
+          <label className="block text-xs font-medium text-gray-700 mb-2">
+            Invoice Status
+          </label>
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+              checked={editForm.invoiceStatus || false}
+              onChange={(e) =>
+                setEditForm({
+                  ...editForm,
+                  invoiceStatus: e.target.checked,
+                })
+              }
+            />
+            <span className="ml-2 text-xs text-gray-700">
+              {editForm.invoiceStatus ? "Invoiced" : "Not Invoiced"}
+            </span>
+          </div>
+        </div>
+
+        <div className="mb-4 w-full">
+          <button
+            type="button"
+            onClick={() => setShowNoteInput(!showNoteInput)}
+            className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center"
+          >
+            <FiEdit2 className="mr-1" size={14} /> {showNoteInput ? 'Hide Note' : 'Add Note'}
+          </button>
+          {showNoteInput && (
+            <div className="mt-2">
+              <textarea
+                className="w-full mt-1 p-2 text-xs border rounded-md"
+                value={note}
+                onChange={handleNoteChange}
+                rows="3"
+                placeholder="e.g., Invoice was sent but email bounced"
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="mt-4 w-full justify-between flex gap-5">
+          <button
+            type="button"
+            className="ml-2 bg-gray-600 text-xs font-semibold text-white px-4 py-2 rounded-md w-full"
+            onClick={() => setShowEditModal(false)}
+            disabled={loading}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="bg-indigo-900 text-xs font-semibold text-white px-4 py-2 rounded-md w-full flex items-center justify-center"
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <svg
+                  className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+                Saving...
+              </>
+            ) : (
+              'Save'
+            )}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
 
         {loading && (
           <div className="mt-8 text-center">
