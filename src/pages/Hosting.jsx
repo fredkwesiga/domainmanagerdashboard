@@ -872,9 +872,9 @@ const Hosting = () => {
         </div>
 
         {showModal && selectedHosting && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-lg w-full max-w-md">
-              <div className="bg-indigo-600 text-white p-4 rounded-t-lg flex justify-between items-center">
+          <div className="fixed inset-0 bg-black/30  bg-opacity-50 flex items-center justify-center z-50  p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+              <div className="bg-indigo-900 text-white p-4 rounded-t-lg flex justify-between items-center">
                 <h2 className="text-xl font-semibold">Hosting Details</h2>
                 <button
                   onClick={() => setShowModal(false)}
@@ -883,11 +883,11 @@ const Hosting = () => {
                   <FiX size={20} />
                 </button>
               </div>
-              <div className="bg-indigo-100 p-4 flex items-center">
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatus(selectedHosting.dates.expiryDate).color}`}>
+              <div className="bg-indigo-900 p-4 flex items-center">
+                <span className={`inline-flex items-center px-5 py-1 rounded-full text-xs font-medium ${getStatus(selectedHosting.dates.expiryDate).color}`}>
                   {getStatus(selectedHosting.dates.expiryDate).text}
                 </span>
-                <span className="ml-2 text-lg font-medium">{selectedHosting.domainName}</span>
+                <span className="ml-2 text-xs text-white/90">{selectedHosting.domainName}</span>
               </div>
               <div className="p-6 space-y-6 max-h-[65vh] overflow-y-auto">
                 <div className="flex items-start">
@@ -981,10 +981,10 @@ const Hosting = () => {
                   </div>
                 )}
               </div>
-              <div className="p-4 bg-gray-50 rounded-b-lg">
+              <div className="px-4 pb-6">
                 <button
                   onClick={() => setShowModal(false)}
-                  className="w-full py-2 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-sm"
+                  className="w-full bg-indigo-900 text-xs font-semibold text-white font-medium py-3 px-4 rounded-xl transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
                 >
                   Close Overview
                 </button>
